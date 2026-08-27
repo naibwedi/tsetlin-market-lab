@@ -1,0 +1,27 @@
+# Free self-collection poller config.
+# Runs on a schedule (GitHub Actions cron or local task) and appends live odds
+# snapshots to data/raw/live/. Develop against synthetic data until this has
+# banked a few weeks of real snapshots.
+
+adapters:
+  - theoddsapi_free      # 500 req/month free tier - keep the budget small
+  # - betfair             # enable only if you have a Betfair account + delayed key
+
+theoddsapi_free:
+  # eu,uk = 2 regions => 2 credits/call. 6 sports x 2 = 12 credits/run.
+  # 500 / 12 ~= 41 runs/month ~= a bit more than once a day. Keep sports short.
+  sports: ["soccer_epl", "soccer_uefa_champs_league"]
+  regions: "eu,uk"
+  markets: "h2h"
+  odds_format: "decimal"
+  min_hours_to_commence: -3   # collect from 72h before until 3h after kickoff
+  max_hours_to_commence: 72
+
+betfair:
+  # See src/ingest/betfair.py docstring. Needs BETFAIR_USER / BETFAIR_PASS /
+  # BETFAIR_APP_KEY (delayed) as env vars / GH secrets.
+  event_type_id: "1"          # soccer
+  competitions: []            # empty = all
+  market_types: ["MATCH_ODDS"]
+
+out_dir: "data/raw/live"

@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest -q
+      # tmu builds fine on Linux runners - exercise the full bake-off on synthetic data
+      - run: pip install tmu || echo "tmu unavailable, bake-off will skip TM models"
+      - run: make all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: results/

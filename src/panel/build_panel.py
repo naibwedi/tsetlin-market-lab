@@ -105,7 +105,7 @@ def _stale_counter(w: pd.DataFrame) -> pd.Series:
 def run(config_path: str = "config/features.yaml") -> pd.DataFrame:
     cfg = load_yaml(config_path)
     raw_dir = resolve("data/raw")
-    frames = [pd.read_parquet(p) for p in raw_dir.glob("*/*.parquet")]
+    frames = [pd.read_parquet(p) for p in sorted(raw_dir.rglob("*.parquet"))]
     if not frames:
         raise SystemExit(f"no raw parquet under {raw_dir}")
     panel = build(pd.concat(frames, ignore_index=True))

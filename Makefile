@@ -1,4 +1,4 @@
-.PHONY: setup synth ingest panel features bakeoff report test lint all clean
+.PHONY: setup synth collect ingest panel features bakeoff report test lint all clean
 
 PY ?= python
 
@@ -8,6 +8,9 @@ setup:
 
 synth:
 	$(PY) -m src.ingest.make_synthetic --n-matches 60
+
+collect:
+	$(PY) -m src.ingest.collect --config config/collect.yaml
 
 ingest:
 	$(PY) -m src.ingest.odds_api --config config/ingest.yaml

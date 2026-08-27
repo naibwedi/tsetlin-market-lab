@@ -1,0 +1,49 @@
+name: collect-odds
+
+# Free unattended data collection. Banks live odds snapshots into the repo so a
+# real dataset accrues at zero cost while the lab is developed on synthetic data.
+#
+# Setup: add repo secret ODDS_API_KEY (The Odds API free tier).
+# Optional: BETFAIR_USER / BETFAIR_PASS / BETFAIR_APP_KEY, then enable the
+# `betfair` adapter in config/collect.yaml.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 min - stays well inside the 500 req/mo free tier
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet pandas pyarrow requests pyyaml python-dotenv
+
+      - name: Poll odds
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          BETFAIR_USER: ${{ secrets.BETFAIR_USER }}
+          BETFAIR_PASS: ${{ secrets.BETFAIR_PASS }}
+          BETFAIR_APP_KEY: ${{ secrets.BETFAIR_APP_KEY }}
+        run: python -m src.ingest.collect --config config/collect.yaml
+
+      - name: Commit new snapshots
+        run: |
+          git config user.name "odds-collector[bot]"
+          git config user.email "actions@github.com"
+          git add -f data/raw/live
+          git diff --cached --quiet || git commit -m "collect: snapshot $(date -u +%FT%TZ)"
+          git pull --rebase --autostash || true
+          git push || true
