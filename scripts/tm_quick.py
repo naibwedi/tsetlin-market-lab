@@ -16,7 +16,7 @@ from tmu.models.classification.vanilla_classifier import TMClassifier  # noqa: E
 from src.common.config import load_yaml, resolve  # noqa: E402
 from src.models.bakeoff import load_split, score  # noqa: E402
 
-CLAUSES, T, S, EPOCHS = 200, 16, 5.0, 12
+CLAUSES, T, S, EPOCHS = 160, 16, 5.0, 8
 
 
 def main() -> None:
@@ -29,13 +29,20 @@ def main() -> None:
 
     tm = TMClassifier(number_of_clauses=CLAUSES, T=T, s=S, weighted_clauses=True, seed=0)
     t0 = time.time()
+    proba = None
     for e in range(EPOCHS):
         tm.fit(Xtr, ytr)
         _, cs = tm.predict(Xte, return_class_sums=True)
         cs = np.asarray(cs, float)
         proba = 1 / (1 + np.exp(-(cs[:, 1] - cs[:, 0]) / T))
-        print(f"  epoch {e+1:2d}  AUC={roc_auc_score(yte, proba):.3f}  "
-              f"PR-AUC={average_precision_score(yte, proba):.3f}  ({time.time()-t0:.0f}s)")
+        line = (f"  epoch {e+1:2d}  AUC={roc_auc_score(yte, proba):.3f}  "
+                f"PR-AUC={average_precision_score(yte, proba):.3f}  ({time.time()-t0:.0f}s)")
+        print(line, flush=True)
+        resolve("results").mkdir(exist_ok=True)
+        with open(resolve("results/tm_quick.json"), "w") as fh:
+            json.dump({"epoch": e + 1, "auc": roc_auc_score(yte, proba),
+                       "pr_auc": average_precision_score(yte, proba),
+                       "secs": time.time() - t0}, fh, indent=2)
 
     m = score(sp.y[sp.te], proba, float(cfg["precision_at_k_frac"]))
     print("FINAL", json.dumps({k: round(v, 4) for k, v in m.items()}))
