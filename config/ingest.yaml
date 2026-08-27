@@ -1,0 +1,25 @@
+# Historical odds ingestion config.
+leagues:
+  - soccer_epl
+  - soccer_spain_la_liga
+  - soccer_italy_serie_a
+  - soccer_germany_bundesliga
+  - soccer_france_ligue_one
+  - soccer_uefa_champs_league
+
+regions: "eu,uk"
+markets: "h2h"
+odds_format: "decimal"
+
+# Snapshot window around each match.
+window_hours_before_kickoff: 24
+snapshot_step_minutes: 5
+
+# History depth. Set a real range once the Business plan is active.
+date_from: "2026-02-01T00:00:00Z"
+date_to: "2026-06-30T00:00:00Z"
+
+# Politeness / safety.
+max_requests_per_run: 20000
+request_pause_seconds: 0.3
+out_dir: "data/raw"

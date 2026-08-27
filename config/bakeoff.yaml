@@ -1,0 +1,35 @@
+# Bake-off config.
+features_dir: "data/features"
+results_dir: "results"
+
+split:
+  method: "time_grouped"   # time-ordered, matches never straddle a boundary
+  train_frac: 0.6
+  val_frac: 0.2
+  # test_frac = remainder
+
+seeds: [0, 1, 2, 3, 4]
+
+baselines:
+  - majority
+  - moved_last
+  - logistic
+  - decision_tree
+  - random_forest
+  - xgboost
+  - lightgbm
+
+decision_tree:
+  max_depth: 5
+
+tsetlin:
+  enabled: true            # requires the `tm` extra (tmu); auto-skipped if missing
+  variants: ["vanilla", "weighted", "coalesced"]
+  grid:
+    clauses: [200, 500, 1000, 2000]
+    T: [8, 16, 32]
+    s: [3.0, 5.0, 10.0]
+  epochs: 40
+
+metrics: ["roc_auc", "pr_auc", "f1", "brier", "precision_at_k"]
+precision_at_k_frac: 0.1

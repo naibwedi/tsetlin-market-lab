@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+data/raw/
+data/panel/
+results/*.json
+results/bakeoff_*/
+.pytest_cache/
+.ruff_cache/
+*.ipynb_checkpoints

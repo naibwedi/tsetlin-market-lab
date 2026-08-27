@@ -1,0 +1,22 @@
+# Feature factory / target config.
+panel_path: "data/panel/panel.parquet"
+out_dir: "data/features"
+
+# Target: does THIS book's fair p_home move by >= threshold between t and t+1?
+target:
+  outcome: "home"                # home | draw | away
+  move_threshold_prob: 0.005     # 0.5 implied-percentage-points
+  horizon_snapshots: 1           # predict the next snapshot
+
+# Booleanization thresholds.
+dispersion_high_quantile: 0.75
+above_consensus_prob: 0.01
+stale_snapshots: 3               # 3 * 5min = 15min
+kickoff_buckets_minutes: [15, 60, 180]
+move_pct_bins: [0.01, 0.03]      # 1%, 3% relative odds move literals
+
+# "Sharp" reference books whose moves get their own literals.
+reference_books: ["pinnacle", "betfair_ex_eu", "marathonbet"]
+
+anchor_only_pre_kickoff: true    # drop rows after commence_time
+min_books_per_snapshot: 4
