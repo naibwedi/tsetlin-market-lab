@@ -8,7 +8,7 @@ split:
   val_frac: 0.2
   # test_frac = remainder
 
-seeds: [0, 1, 2, 3, 4]
+seeds: [0, 1]
 
 baselines:
   - majority
@@ -23,13 +23,13 @@ decision_tree:
   max_depth: 5
 
 tsetlin:
-  enabled: true            # requires the `tm` extra (tmu); auto-skipped if missing
-  variants: ["vanilla", "weighted", "coalesced"]
+  enabled: true            # requires tmu (numpy<2). auto-skipped if missing
+  variants: ["vanilla", "weighted"]
   grid:
-    clauses: [200, 500, 1000, 2000]
+    clauses: [200, 300, 1000, 2000]
     T: [8, 16, 32]
     s: [3.0, 5.0, 10.0]
-  epochs: 40
+  epochs: 15
 
 metrics: ["roc_auc", "pr_auc", "f1", "brier", "precision_at_k"]
 precision_at_k_frac: 0.1

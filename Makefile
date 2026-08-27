@@ -1,10 +1,19 @@
-.PHONY: setup synth collect ingest panel features bakeoff report test lint all clean
+.PHONY: setup setup-tm synth collect ingest panel features bakeoff bakeoff-tm report test lint all clean
 
 PY ?= python
 
 setup:
 	$(PY) -m pip install -e ".[dev]"
-	@echo "For Tsetlin models (Linux/WSL/Docker): pip install -e '.[tm]'"
+
+# Tsetlin needs numpy<2 -> keep it in its own venv (.venv-tm).
+setup-tm:
+	py -3.12 -m venv .venv-tm
+	.venv-tm/Scripts/python -m pip install -U pip
+	.venv-tm/Scripts/python -m pip install "numpy<2" "scikit-learn==1.5.2" pandas pyarrow pyyaml python-dotenv xgboost lightgbm matplotlib tmu==0.8.3
+
+bakeoff-tm:
+	.venv-tm/Scripts/python -m src.models.bakeoff --config config/bakeoff.yaml
+	.venv-tm/Scripts/python -m src.analysis.clauses --config config/bakeoff.yaml
 
 synth:
 	$(PY) -m src.ingest.make_synthetic --n-matches 60

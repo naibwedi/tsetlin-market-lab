@@ -14,3 +14,5 @@ results/bakeoff_*/
 .ruff_cache/
 *.ipynb_checkpoints
 results/*.md
+.venv-tm/
+scripts/__pycache__/

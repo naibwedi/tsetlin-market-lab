@@ -17,8 +17,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# tmu builds C/CUDA extensions; install in WSL2 / Docker / Linux CI.
-tm = ["tmu>=0.8"]
+# tmu 0.8.3 ships a prebuilt Windows wheel but is NOT numpy 2.x compatible.
+# Install into a SEPARATE env pinned to numpy<2 (see .venv-tm / Makefile setup-tm).
+tm = ["tmu==0.8.3", "numpy<2", "scikit-learn==1.5.2"]
 dev = ["pytest>=8", "ruff>=0.4"]
 
 [build-system]

@@ -28,24 +28,24 @@ def _tm_clauses(sp, params, epochs, seed, top=25) -> list[str]:
         number_of_clauses=params["clauses"], T=params["T"], s=params["s"],
         weighted_clauses=True, seed=seed,
     )
-    Xtr = sp.X[sp.tr | sp.va]
+    Xtr = sp.X[sp.tr | sp.va].astype(np.uint32)
     ytr = sp.y[sp.tr | sp.va].astype(np.uint32)
     for _ in range(epochs):
         tm.fit(Xtr, ytr)
 
     n_lit = len(sp.feat)
     out: list[str] = []
-    for cls in (0, 1):
+    for cls in (1, 0):
         for c in range(params["clauses"]):
             lits = []
             for k in range(n_lit):
-                if tm.get_ta_action(clause=c, ta=k, the_class=cls):
+                if tm.get_ta_action(clause=c, ta=k, the_class=cls, polarity=0):
                     lits.append(sp.feat[k])
-                if tm.get_ta_action(clause=c, ta=k + n_lit, the_class=cls):
+                if tm.get_ta_action(clause=c, ta=k, the_class=cls, polarity=1):
                     lits.append(f"NOT {sp.feat[k]}")
             if lits:
                 verdict = "MOVE" if cls == 1 else "NO-MOVE"
-                out.append(f"IF {' AND '.join(lits)}  ->  {verdict}")
+                out.append(f"IF {' AND '.join(lits)}  ->  {verdict}  [{len(lits)} lits]")
     return out[:top]
 
 

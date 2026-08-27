@@ -91,15 +91,17 @@ is proven; see `src/ingest/odds_api.py`.
 
 ## Tsetlin Machine
 
-`tmu` builds C/CUDA extensions and is awkward to build natively on Windows.
-Run the modeling stages in **WSL2 / Docker / Linux CI**:
+`tmu` 0.8.3 ships a prebuilt Windows wheel (no compiler needed) **but is not
+NumPy 2.x compatible**. Keep it in its own env pinned to `numpy<2`:
 
 ```bash
-pip install -e ".[tm]"
+make setup-tm       # creates .venv-tm
+make bakeoff-tm     # runs bake-off + clause report with TM included
 ```
 
-`bakeoff.py` and `clauses.py` auto-skip the TM models when `tmu` is missing, so
-the baseline bake-off still runs on Windows.
+`bakeoff.py` / `clauses.py` auto-skip the TM models if `tmu` is missing, so the
+main `.venv` still runs the baseline bake-off. The `pycuda` warnings on startup
+are harmless — it falls back to CPU clause banks.
 
 ## Leakage discipline
 

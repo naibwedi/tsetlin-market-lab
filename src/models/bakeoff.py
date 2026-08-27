@@ -150,15 +150,15 @@ def run_tm(sp: Split, variant: str, params: dict, epochs: int, seed: int) -> np.
         weighted_clauses=weighted,
         seed=seed,
     )
-    Xtr = sp.X[sp.tr | sp.va]
+    Xtr = sp.X[sp.tr | sp.va].astype(np.uint32)
     ytr = sp.y[sp.tr | sp.va].astype(np.uint32)
+    Xte = sp.X[sp.te].astype(np.uint32)
     for _ in range(epochs):
         tm.fit(Xtr, ytr)
-    scores = tm.predict(sp.X[sp.te], return_class_sums=True)
-    if isinstance(scores, tuple):
-        cs = np.asarray(scores[1], dtype=float)
-        return 1.0 / (1.0 + np.exp(-(cs[:, 1] - cs[:, 0]) / max(1, params["T"])))
-    return np.asarray(scores, dtype=float)
+    _, cs = tm.predict(Xte, return_class_sums=True)
+    cs = np.asarray(cs, dtype=float)
+    margin = (cs[:, 1] - cs[:, 0]) / max(1, params["T"])
+    return 1.0 / (1.0 + np.exp(-margin))
 
 
 # --------------------------------------------------------------------------- #
