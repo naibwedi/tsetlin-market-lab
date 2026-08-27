@@ -13,3 +13,4 @@ results/bakeoff_*/
 .pytest_cache/
 .ruff_cache/
 *.ipynb_checkpoints
+results/*.md
