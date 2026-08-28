@@ -1,0 +1,35 @@
+# Lightweight bake-off for CI: full baselines + a small Tsetlin sanity check
+# (1 variant, 1 seed, few epochs) just to prove the TM path runs on Linux.
+features_dir: "data/features"
+results_dir: "results"
+
+split:
+  method: "time_grouped"
+  train_frac: 0.6
+  val_frac: 0.2
+
+seeds: [0]
+
+baselines:
+  - majority
+  - moved_last
+  - logistic
+  - decision_tree
+  - random_forest
+  - xgboost
+  - lightgbm
+
+decision_tree:
+  max_depth: 5
+
+tsetlin:
+  enabled: true
+  variants: ["weighted"]
+  grid:
+    clauses: [100, 150, 300, 500]
+    T: [8, 16, 32]
+    s: [3.0, 5.0, 10.0]
+  epochs: 10
+
+metrics: ["roc_auc", "pr_auc", "f1", "brier", "precision_at_k"]
+precision_at_k_frac: 0.1

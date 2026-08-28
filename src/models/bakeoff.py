@@ -194,12 +194,17 @@ def run(config_path: str = "config/bakeoff.yaml") -> pd.DataFrame:
             params = {"clauses": g["clauses"][1], "T": g["T"][1], "s": g["s"][1]}
             for variant in cfg["tsetlin"]["variants"]:
                 t0 = time.time()
-                proba = run_tm(sp, variant, params, cfg["tsetlin"]["epochs"], seed)
+                try:
+                    proba = run_tm(sp, variant, params, cfg["tsetlin"]["epochs"], seed)
+                except Exception as e:  # noqa: BLE001 - never let TM break the bake-off
+                    print(f"  (tm_{variant} failed: {type(e).__name__}: {e} - skipping. "
+                          "tmu needs numpy<2; the fast kernel needs Linux.)")
+                    break
                 rows.append({"model": f"tm_{variant}", "seed": seed,
                              "secs": round(time.time() - t0, 2),
                              **score(sp.y[sp.te], proba, kfrac)})
         elif cfg["tsetlin"]["enabled"]:
-            print("  (tmu not installed - skipping Tsetlin models; install the `tm` extra)")
+            print("  (tmu not installed - skipping Tsetlin models)")
 
     df = pd.DataFrame(rows)
     summary = (

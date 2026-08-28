@@ -14,12 +14,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e ".[dev]"
-      - run: ruff check src tests
+
+      # tmu needs numpy<2; the [tm] extra pins it. Install dev+tm together so the
+      # resolver picks one consistent numpy for the whole run.
+      - run: pip install -e ".[dev,tm]"
+      - run: python -c "import numpy, tmu; print('numpy', numpy.__version__)"
+
+      - run: ruff check src tests scripts
       - run: pytest -q
-      # tmu builds fine on Linux runners - exercise the full bake-off on synthetic data
-      - run: pip install tmu || echo "tmu unavailable, bake-off will skip TM models"
-      - run: make all
+
+      # synthetic pipeline + lightweight bake-off (baselines + small TM sanity)
+      - run: python -m src.ingest.make_synthetic --n-matches 60
+      - run: python -m src.panel.build_panel --config config/features.yaml
+      - run: python -m src.features.booleanize --config config/features.yaml
+      - run: python -m src.models.bakeoff --config config/bakeoff.ci.yaml
+      - run: python -m src.analysis.clauses --config config/bakeoff.ci.yaml
+
+      - run: cat results/summary.md
       - uses: actions/upload-artifact@v4
         with:
           name: results

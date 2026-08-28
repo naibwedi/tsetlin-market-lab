@@ -76,14 +76,16 @@ def run(config_path: str = "config/bakeoff.yaml") -> None:
     if imp is not None:
         parts += ["## XGBoost feature importance (top 20)", "```", imp.to_string(), "```", ""]
 
+    tm_section = "_tmu not installed - run with the `tm` extra._"
     if _HAS_TM:
-        g = cfg["tsetlin"]["grid"]
-        params = {"clauses": g["clauses"][1], "T": g["T"][1], "s": g["s"][1]}
-        clauses = _tm_clauses(sp, params, cfg["tsetlin"]["epochs"], cfg["seeds"][0])
-        parts += ["## Tsetlin Machine clauses (top 25 by presence)", "```",
-                  "\n".join(clauses), "```", ""]
-    else:
-        parts += ["## Tsetlin Machine clauses", "_tmu not installed - run with the `tm` extra._", ""]
+        try:
+            g = cfg["tsetlin"]["grid"]
+            params = {"clauses": g["clauses"][1], "T": g["T"][1], "s": g["s"][1]}
+            clauses = _tm_clauses(sp, params, cfg["tsetlin"]["epochs"], cfg["seeds"][0])
+            tm_section = "```\n" + "\n".join(clauses) + "\n```"
+        except Exception as e:  # noqa: BLE001
+            tm_section = f"_TM run failed ({type(e).__name__}: {e}). Needs numpy<2 + Linux._"
+    parts += ["## Tsetlin Machine clauses (top 25 by presence)", tm_section, ""]
 
     parts += [
         "## Verdict (fill in)",
