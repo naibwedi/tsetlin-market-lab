@@ -10,12 +10,12 @@ one row per (snapshot_ts, match_id, bookmaker, outcome).
 Auth: set KAGGLE_API_TOKEN=KGAT_... in the environment (never commit it).
 
     python -m src.ingest.btb --leagues "England: Premier League" --min-books 6
+    python -m src.ingest.btb --leagues top          # 8 European leagues
 """
 from __future__ import annotations
 
 import argparse
 import re
-from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -59,78 +59,83 @@ def _series_files() -> list:
     return [p for p in (BTB_DIR / "odds_series.csv.gz", BTB_DIR / "odds_series_b.csv.gz") if p.exists()]
 
 
-def _reshape_match(row: pd.Series, meta: pd.Series) -> list[dict]:
-    """One wide series row -> long rows, dropping missing/degenerate quotes."""
-    out: list[dict] = []
-    ct = meta["commence_time"]
+def _reshape_chunk(chunk: pd.DataFrame, mid2ct: dict, mid2meta: dict) -> pd.DataFrame:
+    """Vectorised: wide series rows (one per match) -> long rows."""
+    mids = chunk["match_id"].to_numpy()
+    ct = pd.DatetimeIndex([mid2ct[m] for m in mids])
+    home = np.array([mid2meta[m][0] for m in mids])
+    away = np.array([mid2meta[m][1] for m in mids])
+    frames = []
     for bi, book in enumerate(BOOKS, start=1):
-        for t in range(N_STEPS):
-            prices = {}
-            for slot, name in (("home", "Home"), ("draw", "Draw"), ("away", "Away")):
-                col = f"{slot}_b{bi}_{t}"
-                v = row.get(col, np.nan)
-                if pd.notna(v) and float(v) > 1.0:
-                    prices[name] = float(v)
-            if len(prices) < 3:
-                continue
-            ts = (ct - timedelta(hours=N_STEPS - 1 - t)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            for name, price in prices.items():
-                out.append({
-                    "sport": "soccer_btb",
-                    "snapshot_ts": ts,
-                    "match_id": str(row["match_id"]),
-                    "commence_time": ct.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "home_team": meta.get("home_team", ""),
-                    "away_team": meta.get("away_team", ""),
-                    "bookmaker": book,
-                    "book_last_update": ts,
-                    "market": "h2h",
-                    "outcome_name": name,
-                    "price": price,
-                })
-    return out
+        cols = {s: [f"{s}_b{bi}_{t}" for t in range(N_STEPS)] for s in ("home", "draw", "away")}
+        if cols["home"][0] not in chunk.columns:
+            continue
+        arr = {s: chunk[cols[s]].to_numpy(dtype=float) for s in cols}  # each (n_matches, 72)
+        valid = (arr["home"] > 1.0) & (arr["draw"] > 1.0) & (arr["away"] > 1.0)
+        mi, ti = np.where(valid)
+        if mi.size == 0:
+            continue
+        base = ct.take(mi)
+        ts = base - pd.to_timedelta(N_STEPS - 1 - ti, unit="h")
+        for slot, name in (("home", "Home"), ("draw", "Draw"), ("away", "Away")):
+            frames.append(pd.DataFrame({
+                "sport": "soccer_btb",
+                "snapshot_ts": ts,
+                "match_id": mids[mi].astype(str),
+                "commence_time": base,
+                "home_team": home[mi], "away_team": away[mi],
+                "bookmaker": book, "book_last_update": ts,
+                "market": "h2h", "outcome_name": name, "price": arr[slot][mi, ti],
+            }))
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
 def run(leagues: list[str], min_books: int, max_matches: int | None) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    matches = _load_matches().set_index("match_id")
+    matches = _load_matches()
     if leagues:
         matches = matches[matches["league"].isin(leagues)]
     print(f"{len(matches)} matches in {matches['league'].nunique()} leagues")
 
-    wanted = set(matches.index.astype(str))
-    per_league: dict[str, list[dict]] = {}
+    mid2ct = dict(zip(matches["match_id"], matches["commence_time"], strict=False))
+    mid2meta = {r.match_id: (r.home_team, r.away_team) for r in matches.itertuples()}
+    mid2league = dict(zip(matches["match_id"], matches["league"], strict=False))
+    wanted = set(matches["match_id"])
+
+    buf: dict[str, list[pd.DataFrame]] = {}
     seen = 0
     for f in _series_files():
-        for chunk in pd.read_csv(f, encoding="latin-1", chunksize=500):
-            chunk["match_id"] = chunk["match_id"].astype(str)
+        for chunk in pd.read_csv(f, encoding="latin-1", chunksize=400):
             chunk = chunk[chunk["match_id"].isin(wanted)]
-            for _, row in chunk.iterrows():
-                meta = matches.loc[int(row["match_id"])]
-                rows = _reshape_match(row, meta)
-                if not rows:
-                    continue
-                n_books = len({r["bookmaker"] for r in rows})
-                if n_books < min_books:
-                    continue
-                per_league.setdefault(_slug(meta["league"]), []).extend(rows)
-                seen += 1
-                if max_matches and seen >= max_matches:
-                    break
+            if chunk.empty:
+                continue
+            long = _reshape_chunk(chunk, mid2ct, mid2meta)
+            if long.empty:
+                continue
+            nb = long.groupby("match_id")["bookmaker"].nunique()
+            keep = set(nb[nb >= min_books].index)
+            long = long[long["match_id"].isin(keep)]
+            long["_league"] = long["match_id"].astype(int).map(mid2league).map(_slug)
+            for slug, part in long.groupby("_league"):
+                buf.setdefault(slug, []).append(part.drop(columns="_league"))
+            seen += len(keep)
             if max_matches and seen >= max_matches:
                 break
+        if max_matches and seen >= max_matches:
+            break
 
-    for slug, rows in per_league.items():
-        df = pd.DataFrame(rows)
+    for slug, parts in buf.items():
+        df = pd.concat(parts, ignore_index=True).drop_duplicates(
+            ["match_id", "snapshot_ts", "bookmaker", "outcome_name"])
         path = OUT_DIR / f"{slug}.parquet"
         df.to_parquet(path, index=False)
         print(f"  {path.name}: {len(df):,} rows, {df.match_id.nunique()} matches, "
               f"{df.bookmaker.nunique()} books")
-    print(f"done: {seen} matches reshaped")
+    print(f"done: ~{seen} matches reshaped")
 
 
 def _slug(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
+    return re.sub(r"[^a-z0-9]+", "_", str(s).lower()).strip("_")
 
 
 if __name__ == "__main__":
@@ -140,6 +145,6 @@ if __name__ == "__main__":
     ap.add_argument("--min-books", type=int, default=6)
     ap.add_argument("--max-matches", type=int, default=0)
     a = ap.parse_args()
-    leagues = TOP_LEAGUES if a.leagues.strip() == "top" else [
+    ls = TOP_LEAGUES if a.leagues.strip() == "top" else [
         s.strip() for s in a.leagues.split(",") if s.strip()]
-    run(leagues, a.min_books, a.max_matches or None)
+    run(ls, a.min_books, a.max_matches or None)
