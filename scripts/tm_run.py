@@ -40,32 +40,36 @@ def _build(cpu: bool):
     return m, "CPU", CPU_CLAUSES, CPU_EPOCHS
 
 
-def _clauses(tm, feat: list[str], n_clauses: int, limit: int = 60) -> list[str]:
+def _clauses(tm, feat: list[str], n_clauses: int, limit: int = 80) -> list[str]:
+    """Read each clause's included literals.
+
+    tmu layout: TMClassifier.get_ta_action(clause, ta) with ta in [0, 2n):
+    ta<n -> positive literal ta, ta>=n -> negated literal (ta-n). The first
+    half of the clauses are positive-polarity (vote 'move'), the rest negative.
+    The CUDA clause bank throws IndexError on the very last clause - skip it.
+    """
     n = len(feat)
     out: list[str] = []
-    for cls in (1, 0):
-        for c in range(n_clauses):
-            lits: list[str] = []
-            for k in range(n):
-                try:
-                    if tm.get_ta_action(clause=c, ta=k, the_class=cls, polarity=0):
-                        lits.append(feat[k])
-                    if tm.get_ta_action(clause=c, ta=k, the_class=cls, polarity=1):
-                        lits.append("NOT " + feat[k])
-                except TypeError:  # older tmu: negated literals live at ta = k + n
-                    if tm.get_ta_action(clause=c, ta=k, the_class=cls):
-                        lits.append(feat[k])
-                    if tm.get_ta_action(clause=c, ta=k + n, the_class=cls):
-                        lits.append("NOT " + feat[k])
-            if 0 < len(lits) <= 6:
-                out.append(f"[{'MOVE' if cls else 'NO-MOVE'}] IF " + " AND ".join(lits))
+    half = n_clauses // 2
+    for c in range(n_clauses):
+        try:
+            lits = [feat[k] for k in range(n) if tm.get_ta_action(c, k)]
+            lits += ["NOT " + feat[k] for k in range(n) if tm.get_ta_action(c, n + k)]
+        except Exception:  # noqa: BLE001 - tmu CUDA edge cases
+            continue
+        if 0 < len(lits) <= 6:
+            verdict = "MOVE" if c < half else "NO-MOVE"
+            out.append(f"[{verdict}] IF " + " AND ".join(lits))
     return out[:limit]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cpu", action="store_true")
-    cpu = ap.parse_args().cpu
+    ap.add_argument("--clauses", type=int, default=0, help="override clause count")
+    ap.add_argument("--epochs", type=int, default=0, help="override epoch count")
+    args = ap.parse_args()
+    cpu = args.cpu
 
     resolve("results").mkdir(exist_ok=True)
     sp = load_split(load_yaml("config/bakeoff.yaml"))
@@ -77,6 +81,12 @@ def main() -> None:
           f"pos_rate={yte.mean():.3f}", flush=True)
 
     tm, backend, n_clauses, n_epochs = _build(cpu)
+    if args.clauses:
+        n_clauses = args.clauses
+        tm = TMClassifier(number_of_clauses=n_clauses, T=T, s=S, weighted_clauses=True,
+                          platform=("CUDA" if backend == "CUDA" else "CPU"), seed=0)
+    if args.epochs:
+        n_epochs = args.epochs
     print(f"backend: {backend}  clauses={n_clauses}  epochs={n_epochs}  "
           f"(first fit compiles kernels - ~30-60s)", flush=True)
 

@@ -35,7 +35,8 @@ jobs:
           uv venv /tmp/tm311 --python 3.11
           uv pip install -q --python /tmp/tm311/bin/python \
             'numpy<2' 'scikit-learn==1.5.2' pandas pyarrow pyyaml python-dotenv tmu
-          /tmp/tm311/bin/python -m scripts.tm_run --cpu | tee results/tm_run.log
+          # tiny params: this job only proves the path + clause extraction, not accuracy
+          /tmp/tm311/bin/python -m scripts.tm_run --cpu --clauses 80 --epochs 5 | tee results/tm_run.log
 
       - name: Summary
         if: always()
