@@ -1,4 +1,12 @@
-"""Tsetlin bake-off entry using the green-tsetlin C++ engine (fast).
+"""Tsetlin bake-off entry using the green-tsetlin C++ engine.
+
+STATUS (2026-08-29): green-tsetlin's pip build (both 1.0.1 and 1.1.0) raises
+"All ClauseBlocks must be init() before constructing an Executor()" even on its
+own bundled xor example, on GitHub's Linux runners. `tmu` runs but is
+unusably slow without a CUDA GPU. The working path today is the Colab notebook
+(`notebooks/tm_bakeoff_colab.ipynb`, tmu on a free T4). Keep this script for a
+Codespace / local-Linux box where a good toolchain can be set up interactively.
+
 
 Runs on the features produced by src/features/booleanize.py, on the same
 time-ordered split as src/models/bakeoff.py. Writes:

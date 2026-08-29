@@ -91,17 +91,22 @@ is proven; see `src/ingest/odds_api.py`.
 
 ## Tsetlin Machine
 
-`tmu` 0.8.3 ships a prebuilt Windows wheel (no compiler needed) **but is not
-NumPy 2.x compatible**. Keep it in its own env pinned to `numpy<2`:
+The Tsetlin engines are fussy about their environment:
 
-```bash
-make setup-tm       # creates .venv-tm
-make bakeoff-tm     # runs bake-off + clause report with TM included
-```
+| Engine | Windows | Linux CI | Colab GPU |
+|---|---|---|---|
+| `tmu` | installs, **no CUDA = far too slow** | same | **fast (T4)** ✅ |
+| `green-tsetlin` | needs a compiler | pip build **crashes on its own examples** | untested |
 
-`bakeoff.py` / `clauses.py` auto-skip the TM models if `tmu` is missing, so the
-main `.venv` still runs the baseline bake-off. The `pycuda` warnings on startup
-are harmless — it falls back to CPU clause banks.
+**The working path is `notebooks/tm_bakeoff_colab.ipynb`** — open in Colab, set
+**Runtime → T4 GPU**, Run all. It clones this repo, builds features, runs the
+baselines, then trains a weighted TM on CUDA and prints the leaderboard row plus
+the clauses it learned.
+
+`scripts/tm_gt.py` (green-tsetlin) is kept for a Codespace / local-Linux box
+where the toolchain can be fixed interactively. `bakeoff.py` / `clauses.py`
+auto-skip TM when the library is missing or errors, so the baseline bake-off
+always runs.
 
 ## Leakage discipline
 
