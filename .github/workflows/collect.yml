@@ -1,16 +1,20 @@
 name: collect-odds
 
-# Free unattended data collection. Banks live odds snapshots into the repo so a
-# real dataset accrues at zero cost while the lab is developed on synthetic data.
+# Free unattended odds collection. One short run per hour appends a snapshot and
+# commits it. Hourly (not */30) because GitHub throttles sub-hourly `schedule:`
+# on private repos, and to stay inside the 2000 Actions-min/month free tier
+# (~2 min/run x 24 x 30 = ~1440 min).
 #
-# Setup: add repo secret ODDS_API_KEY (The Odds API free tier).
-# Optional: BETFAIR_USER / BETFAIR_PASS / BETFAIR_APP_KEY, then enable the
-# `betfair` adapter in config/collect.yaml.
+# Want tighter spacing later? Make the repo public (unlimited minutes + reliable
+# schedule), or move collection to a small always-on box.
+#
+# Setup: repo secret ODDS_API_KEY. Optional BETFAIR_USER / BETFAIR_PASS /
+# BETFAIR_APP_KEY, then enable the `betfair` adapter in config/collect.yaml.
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"   # every 30 min - stays well inside the 500 req/mo free tier
   workflow_dispatch:
+  schedule:
+    - cron: "9 * * * *"
 
 permissions:
   contents: write
@@ -22,13 +26,12 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - run: pip install --quiet pandas pyarrow requests pyyaml python-dotenv
 
       - name: Poll odds
@@ -44,6 +47,10 @@ jobs:
           git config user.name "odds-collector[bot]"
           git config user.email "actions@github.com"
           git add -f data/raw/live
-          git diff --cached --quiet || git commit -m "collect: snapshot $(date -u +%FT%TZ)"
-          git pull --rebase --autostash || true
-          git push || true
+          git diff --cached --quiet && exit 0
+          git commit -m "collect: snapshot $(date -u +%FT%TZ)"
+          for attempt in 1 2 3; do
+            git pull --rebase --autostash origin main && git push origin main && exit 0
+            echo "push retry $attempt"; sleep 5
+          done
+          exit 1
