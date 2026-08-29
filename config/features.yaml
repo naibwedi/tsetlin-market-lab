@@ -2,6 +2,10 @@
 panel_path: "data/panel/panel.parquet"
 out_dir: "data/features"
 
+# Which raw sources feed the panel. "**" = everything under data/raw/. To analyse
+# one source cleanly (e.g. only Beat-The-Bookie), set "data/raw/btb_long/*.parquet".
+raw_glob: "data/raw/**/*.parquet"
+
 # Target: does THIS book's fair p_home move by >= threshold between t and t+1?
 target:
   outcome: "home"                # home | draw | away

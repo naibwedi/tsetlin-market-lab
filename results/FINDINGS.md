@@ -23,7 +23,7 @@ hour): **7.1%**.
 | Random forest | 0.667 | 0.148 | 0.173 |
 | "moved last snapshot" rule | 0.608 | 0.094 | 0.152 |
 | Majority / coin flip | 0.500 | 0.062 | 0.056 |
-| Tsetlin Machine | _pending (Colab GPU)_ | | |
+| **Tsetlin Machine** (600 clauses, 120k-row subsample, Colab T4) | **0.742** | 0.196 | 0.211 |
 
 ### Leakage control
 
@@ -42,6 +42,30 @@ signal, not leakage.
    signal is much richer than "it moved, so it'll move again".
 4. Weaker than synthetic (0.765 vs ~0.78) as expected — real markets are noisier
    and stickier.
+
+### Tsetlin Machine: ties, and the clauses need work
+
+**AUC 0.742** — a tie with the decision tree (0.740), a hair behind logistic/GBM.
+Same verdict as synthetic: it matches the black boxes, doesn't beat them, so its
+rules come "for free" — *if* the rules are good.
+
+They are not, yet. The dominant learned clauses are single-literal, per-book:
+`IF book_is_betway -> MOVE`, `IF book_is_jetbull -> MOVE`, ... The machine mostly
+learned *which books are twitchier than others* — true, but not insight.
+
+The lead/lag clauses we actually want do appear, just rarely:
+
+```
+IF ref_marathonbet_moved_up_last                          -> MOVE
+IF ref_betfair_ex_eu_moved_last AND NOT book_is_188bet
+                               AND NOT book_is_betfred_uk  -> MOVE
+IF n_books_moved_prev_0                                    -> MOVE  (someone breaks the silence)
+```
+
+**To make those dominate (v0.2 featurisation):** drop raw `book_is_*` identity
+literals (or keep only sharp books), add book-pair "X lags Y" literals, add
+relative-timing literals. Also give the TM a literal budget so it can't spend a
+whole clause on one identity bit.
 
 ### Caveats
 
