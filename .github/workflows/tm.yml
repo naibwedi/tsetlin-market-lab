@@ -1,0 +1,61 @@
+name: tsetlin
+
+# Real Tsetlin Machine run on the green-tsetlin C++ engine (needs a compiler,
+# which the Linux runner has). Manual trigger. Builds synthetic features unless
+# real ones are committed under data/features/.
+
+on:
+  workflow_dispatch:
+    inputs:
+      n_matches:
+        description: "synthetic matches (ignored if data/features/ exists)"
+        default: "60"
+      clauses:
+        description: "number of clauses"
+        default: "800"
+      epochs:
+        description: "training epochs"
+        default: "40"
+
+jobs:
+  tsetlin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -e ".[dev]" && pip install green-tsetlin
+      - run: python -c "import green_tsetlin as gt; print('green-tsetlin ok')"
+
+      - name: Build features if none committed
+        run: |
+          if [ ! -f data/features/X.parquet ]; then
+            python -m src.ingest.make_synthetic --n-matches "${{ inputs.n_matches }}"
+            python -m src.panel.build_panel --config config/features.yaml
+            python -m src.features.booleanize --config config/features.yaml
+          fi
+
+      - name: Run Tsetlin
+        run: |
+          python -m scripts.tm_gt --clauses "${{ inputs.clauses }}" --epochs "${{ inputs.epochs }}" \
+            | tee results/tm_run.log
+
+      - name: Summary
+        run: |
+          {
+            echo '## Tsetlin result'
+            echo '```json'; cat results/tm_result.json; echo '```'
+            echo '## Top clauses'
+            echo '```'; head -25 results/tm_clauses.txt; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tsetlin-results
+          path: |
+            results/tm_result.json
+            results/tm_clauses.txt
+            results/tm_run.log
