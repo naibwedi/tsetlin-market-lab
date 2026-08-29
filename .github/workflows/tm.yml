@@ -40,6 +40,7 @@ jobs:
 
       - name: Run Tsetlin
         run: |
+          mkdir -p results
           python -m scripts.tm_gt --clauses "${{ inputs.clauses }}" --epochs "${{ inputs.epochs }}" \
             | tee results/tm_run.log
 

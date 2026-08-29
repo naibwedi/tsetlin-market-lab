@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 
 import numpy as np
@@ -67,6 +68,8 @@ def main() -> None:
 
     import green_tsetlin as gt
 
+    resolve("results").mkdir(exist_ok=True)
+    n_jobs = max(1, min(4, os.cpu_count() or 1))  # green-tsetlin needs a positive int
     cfg = load_yaml(a.config)
     sp = load_split(cfg)
     Xtr = np.ascontiguousarray(sp.X[sp.tr | sp.va], dtype=np.uint8)
@@ -78,7 +81,7 @@ def main() -> None:
 
     tm = gt.TsetlinMachine(n_literals=n_lit, n_clauses=a.clauses, n_classes=2,
                            s=a.s, threshold=a.threshold, literal_budget=a.literal_budget)
-    trainer = gt.Trainer(tm, n_epochs=a.epochs, seed=0, n_jobs=-1, progress_bar=False)
+    trainer = gt.Trainer(tm, n_epochs=a.epochs, seed=0, n_jobs=n_jobs, progress_bar=False)
     trainer.set_train_data(Xtr, ytr)
     trainer.set_eval_data(Xte, yte.astype(np.uint32))
     t0 = time.time()
