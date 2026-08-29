@@ -19,6 +19,12 @@ from src.common.config import load_yaml, resolve
 
 MOVE_EPS = 1e-4
 
+# books generally regarded as sharp / market-leading
+SHARP_BOOKS = {
+    "pinnacle", "betfair_ex_eu", "betfair_ex_uk", "betfair_sb_uk", "sbobet",
+    "bet365", "williamhill", "marathonbet", "betvictor", "matchbook", "smarkets",
+}
+
 
 def _target(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     slot = cfg["target"]["outcome"]
@@ -64,30 +70,64 @@ def _literals(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     for pct in cfg["move_pct_bins"]:
         lit[f"thisbook_absmove_ge_{int(pct*100)}pct"] = (p["move_rel"].abs() >= pct).to_numpy()
 
-    # reference-book state, broadcast onto every book's row via (match, snapshot)
-    ref_state = _reference_book_state(p, cfg["reference_books"])
-    for col in ref_state.columns:
-        lit[col] = ref_state[col].to_numpy()
+    # "offside": this book sits on the dear side of consensus AND the market just
+    # drifted further from it -> a candidate to be corrected next.
+    lit["thisbook_offside_high"] = (
+        (p["dev_fp_home"] >= ac) & (p["cons_move_dir"] < 0)
+    ).to_numpy()
+    lit["thisbook_offside_low"] = (
+        (p["dev_fp_home"] <= -ac) & (p["cons_move_dir"] > 0)
+    ).to_numpy()
+    lit["thisbook_stale_while_market_moved"] = (
+        (p["stale_snaps"] >= st) & (p["n_books_moved_prev"] >= 2)
+    ).to_numpy()
 
-    # book identity one-hots (lets clauses be book-specific)
-    for b in sorted(p["bookmaker"].unique()):
-        lit[f"book_is_{b}"] = (p["bookmaker"] == b).to_numpy()
+    # --- reference-book lead/lag literals ------------------------------------
+    for col, vals in _reference_book_state(p, cfg["reference_books"]).items():
+        lit[col] = vals
 
-    X = pd.DataFrame({k: v.astype(np.uint8) for k, v in lit.items()}, index=p.index)
+    # --- book identity ----------------------------------------------------------
+    mode = cfg.get("book_identity", "sharp")
+    is_sharp = p["bookmaker"].isin(SHARP_BOOKS).to_numpy()
+    if mode != "none":
+        lit["thisbook_is_sharp"] = is_sharp
+        lit["thisbook_is_soft"] = ~is_sharp
+    if mode == "sharp":
+        for b in cfg["reference_books"]:
+            lit[f"book_is_{b}"] = (p["bookmaker"] == b).to_numpy()
+    elif mode == "all":
+        for b in sorted(p["bookmaker"].unique()):
+            lit[f"book_is_{b}"] = (p["bookmaker"] == b).to_numpy()
+
+    X = pd.DataFrame({k: np.asarray(v).astype(np.uint8) for k, v in lit.items()}, index=p.index)
     return X
 
 
-def _reference_book_state(p: pd.DataFrame, refs: list[str]) -> pd.DataFrame:
-    out = pd.DataFrame(index=p.index)
+def _reference_book_state(p: pd.DataFrame, refs: list[str]) -> dict[str, np.ndarray]:
+    """For each sharp reference book r, broadcast its last-snapshot move onto
+    every book's row and derive lag/chase literals."""
     key = ["match_id", "snapshot_ts"]
+    idx = pd.MultiIndex.from_arrays([p["match_id"], p["snapshot_ts"]])
+    this_moved = p["moved"].to_numpy()
+    this_dir = p["move_dir"].to_numpy()
+    out: dict[str, np.ndarray] = {}
     for r in refs:
         sub = p[p["bookmaker"] == r].set_index(key)
-        moved = p.set_index(key).index.map(sub["moved"].to_dict()).astype("float")
-        up = p.set_index(key).index.map((sub["move_dir"] > 0).to_dict()).astype("float")
-        out[f"ref_{r}_moved_last"] = np.nan_to_num(moved).astype(bool)
-        out[f"ref_{r}_moved_up_last"] = np.nan_to_num(up).astype(bool)
-        # "this book lags reference": ref moved last snapshot but this book didn't
-        out[f"thisbook_lags_{r}"] = out[f"ref_{r}_moved_last"].to_numpy() & (~p["moved"].to_numpy())
+        moved = np.nan_to_num(idx.map(sub["moved"].to_dict()).astype("float")).astype(bool)
+        rdir = np.nan_to_num(idx.map(sub["move_dir"].to_dict()).astype("float"))
+        out[f"ref_{r}_moved_last"] = moved
+        out[f"ref_{r}_moved_up_last"] = rdir > 0
+        out[f"ref_{r}_moved_down_last"] = rdir < 0
+        # this book has not yet followed the reference's move
+        out[f"thisbook_lags_{r}"] = moved & (~this_moved)
+        out[f"thisbook_lags_{r}_up"] = (rdir > 0) & (this_dir <= 0)
+        out[f"thisbook_lags_{r}_down"] = (rdir < 0) & (this_dir >= 0)
+    # did ANY sharp reference move last snapshot?
+    any_ref = np.zeros(len(p), dtype=bool)
+    for r in refs:
+        any_ref |= out[f"ref_{r}_moved_last"]
+    out["any_sharp_moved_last"] = any_ref
+    out["thisbook_lags_any_sharp"] = any_ref & (~this_moved)
     return out
 
 

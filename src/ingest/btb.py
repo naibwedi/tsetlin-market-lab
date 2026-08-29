@@ -34,6 +34,12 @@ N_STEPS = 72
 BTB_DIR = resolve("data/raw/btb")
 OUT_DIR = resolve("data/raw/btb_long")
 
+TOP_LEAGUES = [
+    "England: Premier League", "Spain: Primera Division", "Germany: Bundesliga",
+    "Italy: Serie A", "France: Ligue 1", "Netherlands: Eredivisie",
+    "Portugal: Primeira Liga", "Europe: Champions League",
+]
+
 
 def _load_matches() -> pd.DataFrame:
     frames = []
@@ -130,9 +136,10 @@ def _slug(s: str) -> str:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--leagues", default="England: Premier League",
-                    help="comma-separated exact league names; empty = all")
+                    help="comma-separated exact league names, or 'top' for the top-8 European")
     ap.add_argument("--min-books", type=int, default=6)
     ap.add_argument("--max-matches", type=int, default=0)
     a = ap.parse_args()
-    run([s.strip() for s in a.leagues.split(",") if s.strip()],
-        a.min_books, a.max_matches or None)
+    leagues = TOP_LEAGUES if a.leagues.strip() == "top" else [
+        s.strip() for s in a.leagues.split(",") if s.strip()]
+    run(leagues, a.min_books, a.max_matches or None)

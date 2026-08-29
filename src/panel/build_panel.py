@@ -85,6 +85,15 @@ def build(raw: pd.DataFrame) -> pd.DataFrame:
     w["n_books"] = snap["bookmaker"].transform("count")
     w["n_books_moved_prev"] = snap["moved"].transform("sum")
 
+    # how the consensus itself moved vs the previous snapshot (per match)
+    cons = (w[["match_id", "snapshot_ts", "cons_fp_home"]]
+            .drop_duplicates(["match_id", "snapshot_ts"])
+            .sort_values(["match_id", "snapshot_ts"]))
+    cons["cons_d_fp_home"] = cons.groupby("match_id", sort=False)["cons_fp_home"].diff()
+    w = w.merge(cons[["match_id", "snapshot_ts", "cons_d_fp_home"]],
+                on=["match_id", "snapshot_ts"], how="left")
+    w["cons_move_dir"] = np.sign(w["cons_d_fp_home"].fillna(0)).astype(int)
+
     return w
 
 

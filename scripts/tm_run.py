@@ -26,6 +26,7 @@ from src.models.bakeoff import load_split  # noqa: E402
 # CUDA is fast; if we fall back to CPU, do much less so it still finishes.
 CLAUSES, T, S, EPOCHS, EVAL_EVERY = 600, 32, 5.0, 15, 3
 CPU_CLAUSES, CPU_EPOCHS = 250, 10
+MAX_LITERALS = 5   # keep clauses short and readable
 # TM epoch time scales with rows; cap the training set so a run finishes in ~10 min.
 MAX_TRAIN_ROWS = 120_000
 
@@ -34,11 +35,12 @@ def _build(cpu: bool):
     if not cpu:
         try:
             m = TMClassifier(number_of_clauses=CLAUSES, T=T, s=S, weighted_clauses=True,
-                             platform="CUDA", seed=0)
+                             max_included_literals=MAX_LITERALS, platform="CUDA", seed=0)
             return m, "CUDA", CLAUSES, EPOCHS
         except Exception as e:  # noqa: BLE001
             print(f"CUDA unavailable ({e}); using CPU", flush=True)
-    m = TMClassifier(number_of_clauses=CPU_CLAUSES, T=T, s=S, weighted_clauses=True, seed=0)
+    m = TMClassifier(number_of_clauses=CPU_CLAUSES, T=T, s=S, weighted_clauses=True,
+                     max_included_literals=MAX_LITERALS, seed=0)
     return m, "CPU", CPU_CLAUSES, CPU_EPOCHS
 
 
@@ -92,6 +94,7 @@ def main() -> None:
     if args.clauses:
         n_clauses = args.clauses
         tm = TMClassifier(number_of_clauses=n_clauses, T=T, s=S, weighted_clauses=True,
+                          max_included_literals=MAX_LITERALS,
                           platform=("CUDA" if backend == "CUDA" else "CPU"), seed=0)
     if args.epochs:
         n_epochs = args.epochs
