@@ -1,0 +1,54 @@
+name: tsetlin
+
+# Proves the Colab cell-3 path (uv -> Python 3.11 -> tmu) end to end on a Linux
+# runner, CPU only. If this is green with a real tm_result.json, the Colab
+# notebook works too (Colab just adds the GPU). Manual trigger.
+
+on:
+  workflow_dispatch:
+    inputs:
+      n_matches:
+        description: "synthetic matches"
+        default: "60"
+
+jobs:
+  tsetlin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # system python: our pure-python pipeline (features + baselines)
+      - run: pip install -e ".[dev]"
+      - run: |
+          python -m src.ingest.make_synthetic --n-matches "${{ inputs.n_matches }}"
+          python -m src.panel.build_panel --config config/features.yaml
+          python -m src.features.booleanize --config config/features.yaml
+
+      # tmu in a throwaway 3.11 env, exactly like the Colab notebook
+      - name: Tsetlin (uv + py3.11 + tmu, CPU)
+        run: |
+          pip install uv
+          uv venv /tmp/tm311 --python 3.11
+          uv pip install -q --python /tmp/tm311/bin/python \
+            'numpy<2' 'scikit-learn==1.5.2' pandas pyarrow pyyaml python-dotenv tmu
+          /tmp/tm311/bin/python -m scripts.tm_run --cpu | tee results/tm_run.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '## Tsetlin result'
+            echo '```json'; cat results/tm_result.json 2>/dev/null || echo 'no result'; echo '```'
+            echo '## Top clauses'
+            echo '```'; head -20 results/tm_clauses.txt 2>/dev/null || echo 'none'; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tsetlin-results
+          path: results/tm_*
