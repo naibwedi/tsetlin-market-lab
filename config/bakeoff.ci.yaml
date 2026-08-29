@@ -23,7 +23,9 @@ decision_tree:
   max_depth: 5
 
 tsetlin:
-  enabled: true
+  # Disabled in CI: tmu's CPU path is pathologically slow (hung a 6h runner).
+  # Real TM runs go through the green-tsetlin engine / Colab. See scripts/tm_run.py.
+  enabled: false
   variants: ["weighted"]
   grid:
     clauses: [100, 150, 300, 500]
