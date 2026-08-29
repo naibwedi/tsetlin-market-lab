@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 
 import numpy as np
@@ -69,7 +68,9 @@ def main() -> None:
     import green_tsetlin as gt
 
     resolve("results").mkdir(exist_ok=True)
-    n_jobs = max(1, min(4, os.cpu_count() or 1))  # green-tsetlin needs a positive int
+    # green-tsetlin 1.1.0: the multithread executor raises "ClauseBlocks must be
+    # init()". Single-thread C++ is still plenty fast for this data size.
+    n_jobs = 1
     cfg = load_yaml(a.config)
     sp = load_split(cfg)
     Xtr = np.ascontiguousarray(sp.X[sp.tr | sp.va], dtype=np.uint8)
