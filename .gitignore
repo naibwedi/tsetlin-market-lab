@@ -16,3 +16,5 @@ results/bakeoff_*/
 results/*.md
 .venv-tm/
 scripts/__pycache__/
+config/_pl*.yaml
+data/_pl_*
