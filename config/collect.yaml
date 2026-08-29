@@ -8,10 +8,11 @@ adapters:
   # - betfair             # enable only if you have a Betfair account + delayed key
 
 theoddsapi_free:
-  # eu,uk = 2 regions => 2 credits/call. 6 sports x 2 = 12 credits/run.
-  # 500 / 12 ~= 41 runs/month ~= a bit more than once a day. Keep sports short.
-  sports: ["soccer_epl", "soccer_uefa_champs_league"]
-  regions: "eu,uk"
+  # FREE tier = 500 credits/month. cost/run = len(sports) * n_regions * n_markets.
+  # 1 sport x 1 region x 1 market = 1 credit/run. Every 2h => ~360/month. Safe.
+  # Add sports/regions only if you move off the free tier or add a Betfair key.
+  sports: ["soccer_epl"]
+  regions: "uk"          # uk has the deepest EPL book coverage
   markets: "h2h"
   odds_format: "decimal"
   min_hours_to_commence: -3   # collect from 72h before until 3h after kickoff

@@ -1,20 +1,21 @@
 name: collect-odds
 
-# Free unattended odds collection. One short run per hour appends a snapshot and
-# commits it. Hourly (not */30) because GitHub throttles sub-hourly `schedule:`
-# on private repos, and to stay inside the 2000 Actions-min/month free tier
-# (~2 min/run x 24 x 30 = ~1440 min).
+# Free unattended odds collection. Repo is public so Actions minutes are
+# unlimited and the schedule is reliable - but The Odds API FREE tier is only
+# 500 credits/month. config/collect.yaml is trimmed to 1 sport / 1 region
+# (= 1 credit/run); every 2h = ~360 credits/month, safely under 500.
 #
-# Want tighter spacing later? Make the repo public (unlimited minutes + reliable
-# schedule), or move collection to a small always-on box.
+# For real intraday spacing you need one of:
+#   - a free Betfair delayed key (unlimited polling; set BETFAIR_* secrets and
+#     enable the `betfair` adapter in config/collect.yaml)
+#   - The Odds API paid tier (~$30/mo = 20k credits)
 #
-# Setup: repo secret ODDS_API_KEY. Optional BETFAIR_USER / BETFAIR_PASS /
-# BETFAIR_APP_KEY, then enable the `betfair` adapter in config/collect.yaml.
+# Setup: repo secret ODDS_API_KEY.
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "9 * * * *"
+    - cron: "13 */2 * * *"
 
 permissions:
   contents: write
