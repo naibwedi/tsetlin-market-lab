@@ -24,8 +24,10 @@ from src.common.config import load_yaml, resolve  # noqa: E402
 from src.models.bakeoff import load_split  # noqa: E402
 
 # CUDA is fast; if we fall back to CPU, do much less so it still finishes.
-CLAUSES, T, S, EPOCHS, EVAL_EVERY = 1000, 32, 5.0, 40, 8
-CPU_CLAUSES, CPU_EPOCHS = 300, 15
+CLAUSES, T, S, EPOCHS, EVAL_EVERY = 600, 32, 5.0, 15, 3
+CPU_CLAUSES, CPU_EPOCHS = 250, 10
+# TM epoch time scales with rows; cap the training set so a run finishes in ~10 min.
+MAX_TRAIN_ROWS = 120_000
 
 
 def _build(cpu: bool):
@@ -77,6 +79,12 @@ def main() -> None:
     ytr = sp.y[sp.tr | sp.va].astype(np.uint32)
     Xte = sp.X[sp.te].astype(np.uint32)
     yte = sp.y[sp.te].astype(int)
+
+    if len(Xtr) > MAX_TRAIN_ROWS:
+        rng = np.random.default_rng(0)
+        idx = rng.choice(len(Xtr), MAX_TRAIN_ROWS, replace=False)
+        Xtr, ytr = Xtr[idx], ytr[idx]
+        print(f"subsampled train to {MAX_TRAIN_ROWS} rows", flush=True)
     print(f"train={len(Xtr)} test={len(Xte)} literals={Xtr.shape[1]} "
           f"pos_rate={yte.mean():.3f}", flush=True)
 
@@ -90,18 +98,24 @@ def main() -> None:
     print(f"backend: {backend}  clauses={n_clauses}  epochs={n_epochs}  "
           f"(first fit compiles kernels - ~30-60s)", flush=True)
 
+    # during training, evaluate on a small slice of the test set (cheap); full test at the end
+    ev = slice(None) if len(Xte) <= 40000 else np.random.default_rng(1).choice(len(Xte), 40000, replace=False)
+
+    def _proba(X):
+        _, cs = tm.predict(X, return_class_sums=True)
+        cs = np.asarray(cs, dtype=float)
+        return 1 / (1 + np.exp(-(cs[:, 1] - cs[:, 0]) / T))
+
     t0 = time.time()
-    proba = None
     for e in range(n_epochs):
         tm.fit(Xtr, ytr)
         if (e + 1) % EVAL_EVERY == 0 or e == 0:
-            _, cs = tm.predict(Xte, return_class_sums=True)
-            cs = np.asarray(cs, dtype=float)
-            proba = 1 / (1 + np.exp(-(cs[:, 1] - cs[:, 0]) / T))
-            print(f"epoch {e+1:2d}/{EPOCHS}  AUC={roc_auc_score(yte, proba):.3f}  "
-                  f"PR-AUC={average_precision_score(yte, proba):.3f}  "
+            p = _proba(Xte[ev])
+            print(f"epoch {e+1:2d}/{n_epochs}  AUC={roc_auc_score(yte[ev], p):.3f}  "
+                  f"PR-AUC={average_precision_score(yte[ev], p):.3f}  "
                   f"({time.time()-t0:.0f}s)", flush=True)
 
+    proba = _proba(Xte)
     order = np.argsort(-proba)
     k = max(1, int(len(proba) * 0.1))
     result = {
