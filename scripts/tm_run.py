@@ -23,7 +23,9 @@ from tmu.models.classification.vanilla_classifier import TMClassifier  # noqa: E
 from src.common.config import load_yaml, resolve  # noqa: E402
 from src.models.bakeoff import load_split  # noqa: E402
 
+# CUDA is fast; if we fall back to CPU, do much less so it still finishes.
 CLAUSES, T, S, EPOCHS, EVAL_EVERY = 1000, 32, 5.0, 40, 8
+CPU_CLAUSES, CPU_EPOCHS = 300, 15
 
 
 def _build(cpu: bool):
@@ -31,17 +33,18 @@ def _build(cpu: bool):
         try:
             m = TMClassifier(number_of_clauses=CLAUSES, T=T, s=S, weighted_clauses=True,
                              platform="CUDA", seed=0)
-            return m, "CUDA"
+            return m, "CUDA", CLAUSES, EPOCHS
         except Exception as e:  # noqa: BLE001
             print(f"CUDA unavailable ({e}); using CPU", flush=True)
-    return TMClassifier(number_of_clauses=CLAUSES, T=T, s=S, weighted_clauses=True, seed=0), "CPU"
+    m = TMClassifier(number_of_clauses=CPU_CLAUSES, T=T, s=S, weighted_clauses=True, seed=0)
+    return m, "CPU", CPU_CLAUSES, CPU_EPOCHS
 
 
-def _clauses(tm, feat: list[str], limit: int = 60) -> list[str]:
+def _clauses(tm, feat: list[str], n_clauses: int, limit: int = 60) -> list[str]:
     n = len(feat)
     out: list[str] = []
     for cls in (1, 0):
-        for c in range(CLAUSES):
+        for c in range(n_clauses):
             lits: list[str] = []
             for k in range(n):
                 try:
@@ -73,12 +76,13 @@ def main() -> None:
     print(f"train={len(Xtr)} test={len(Xte)} literals={Xtr.shape[1]} "
           f"pos_rate={yte.mean():.3f}", flush=True)
 
-    tm, backend = _build(cpu)
-    print(f"backend: {backend}  (first fit compiles kernels - ~30-60s)", flush=True)
+    tm, backend, n_clauses, n_epochs = _build(cpu)
+    print(f"backend: {backend}  clauses={n_clauses}  epochs={n_epochs}  "
+          f"(first fit compiles kernels - ~30-60s)", flush=True)
 
     t0 = time.time()
     proba = None
-    for e in range(EPOCHS):
+    for e in range(n_epochs):
         tm.fit(Xtr, ytr)
         if (e + 1) % EVAL_EVERY == 0 or e == 0:
             _, cs = tm.predict(Xte, return_class_sums=True)
@@ -91,7 +95,7 @@ def main() -> None:
     order = np.argsort(-proba)
     k = max(1, int(len(proba) * 0.1))
     result = {
-        "engine": "tmu", "backend": backend, "clauses": CLAUSES, "T": T, "s": S, "epochs": EPOCHS,
+        "engine": "tmu", "backend": backend, "clauses": n_clauses, "T": T, "s": S, "epochs": n_epochs,
         "roc_auc": float(roc_auc_score(yte, proba)),
         "pr_auc": float(average_precision_score(yte, proba)),
         "f1": float(f1_score(yte, (proba >= 0.5).astype(int), zero_division=0)),
@@ -104,7 +108,7 @@ def main() -> None:
     print("\n=== Tsetlin Machine ===\n" + json.dumps(result, indent=2), flush=True)
 
     try:
-        cl = _clauses(tm, sp.feat)
+        cl = _clauses(tm, sp.feat, n_clauses)
         resolve("results/tm_clauses.txt").write_text("\n".join(cl))
         print(f"\n{len(cl)} short clauses -> results/tm_clauses.txt", flush=True)
         for line in cl[:15]:
