@@ -27,8 +27,9 @@ from src.common.config import load_yaml, resolve
 from src.models.bakeoff import load_split
 
 
-def run(config_path: str = "config/bakeoff.ci.yaml", edge: float = 0.01,
-        top_frac: float = 0.25) -> None:
+def run(config_path: str = "config/bakeoff.ci.yaml",
+        features_config: str = "config/features.yaml",
+        edge: float = 0.01, top_frac: float = 0.25) -> None:
     cfg = load_yaml(config_path)
     sp = load_split(cfg)
     tr = sp.tr | sp.va
@@ -38,7 +39,7 @@ def run(config_path: str = "config/bakeoff.ci.yaml", edge: float = 0.01,
     proba = lr.predict_proba(sp.X[sp.te])[:, 1]
 
     meta = sp.meta[sp.te].reset_index(drop=True)
-    panel = pd.read_parquet(resolve(load_yaml("config/features.yaml")["panel_path"]))
+    panel = pd.read_parquet(resolve(load_yaml(features_config)["panel_path"]))
     panel = panel.sort_values(["snapshot_ts", "match_id", "bookmaker"]).reset_index(drop=True)
 
     # align: features.booleanize keeps rows with a future snapshot, in this order
@@ -48,16 +49,23 @@ def run(config_path: str = "config/bakeoff.ci.yaml", edge: float = 0.01,
     j = m.merge(panel[key + ["fp_home", "cons_fp_home", "dev_fp_home",
                              "minutes_to_kickoff"]], on=key, how="left")
 
-    # closing consensus per match = consensus fp_home at the last pre-kickoff snapshot
-    closing = (panel[panel["minutes_to_kickoff"] >= 0]
-               .sort_values("minutes_to_kickoff")
-               .groupby("match_id")["cons_fp_home"].first()
-               .rename("closing_cons_p_home"))
+    pre = panel[panel["minutes_to_kickoff"] >= 0].sort_values("minutes_to_kickoff")
+    # closing consensus per match, and each book's own closing fair prob
+    closing = pre.groupby("match_id")["cons_fp_home"].first().rename("closing_cons_p_home")
+    book_close = (pre.groupby(["match_id", "bookmaker"])["fp_home"].first()
+                  .rename("book_close_p_home"))
     j = j.merge(closing, on="match_id", how="left")
+    j = j.merge(book_close, on=["match_id", "bookmaker"], how="left")
 
+    # CLV vs the closing market
     j["clv"] = j["closing_cons_p_home"] / j["fp_home"] - 1.0
+    # did THIS book's price actually converge toward consensus by close?
+    gap0 = (j["cons_fp_home"] - j["fp_home"]).abs()
+    gap1 = (j["closing_cons_p_home"] - j["book_close_p_home"]).abs()
+    j["converged_frac"] = 1.0 - (gap1 / gap0).clip(upper=1.0)
 
-    offside = j[(j["dev_fp_home"] <= -edge) & j["clv"].notna()].copy()
+    offside = j[(j["dev_fp_home"] <= -edge) & j["clv"].notna()
+                & j["converged_frac"].notna()].copy()
     if offside.empty:
         resolve("results/backtest.md").write_text("# Backtest\n\nNo offside opportunities found.\n")
         print("no offside opportunities")
@@ -69,7 +77,7 @@ def run(config_path: str = "config/bakeoff.ci.yaml", edge: float = 0.01,
 
     def stat(d: pd.DataFrame) -> dict:
         return {"n": len(d), "mean_clv_pct": round(100 * d["clv"].mean(), 3),
-                "median_clv_pct": round(100 * d["clv"].median(), 3),
+                "converged_frac": round(d["converged_frac"].mean(), 3),
                 "win_rate": round((d["clv"] > 0).mean(), 3)}
 
     rng = np.random.default_rng(0)
@@ -82,18 +90,18 @@ def run(config_path: str = "config/bakeoff.ci.yaml", edge: float = 0.01,
         f"- offside universe: {len(offside):,} (book >= {edge:.0%} below consensus on home)",
         f"- test matches: {offside['match_id'].nunique()}",
         "",
-        "| slice | n | mean CLV % | median CLV % | win rate |",
+        "| slice | n | mean CLV % | converged frac | CLV win rate |",
         "|---|--:|--:|--:|--:|",
         f"| model-flagged (top {top_frac:.0%}) | {stat(flagged)['n']:,} | "
-        f"{stat(flagged)['mean_clv_pct']} | {stat(flagged)['median_clv_pct']} | {stat(flagged)['win_rate']} |",
+        f"{stat(flagged)['mean_clv_pct']} | {stat(flagged)['converged_frac']} | {stat(flagged)['win_rate']} |",
         f"| rest of universe | {stat(rest)['n']:,} | {stat(rest)['mean_clv_pct']} | "
-        f"{stat(rest)['median_clv_pct']} | {stat(rest)['win_rate']} |",
+        f"{stat(rest)['converged_frac']} | {stat(rest)['win_rate']} |",
         f"| random same-size sample | {stat(rand)['n']:,} | {stat(rand)['mean_clv_pct']} | "
-        f"{stat(rand)['median_clv_pct']} | {stat(rand)['win_rate']} |",
+        f"{stat(rand)['converged_frac']} | {stat(rand)['win_rate']} |",
         "",
-        "**Read:** positive CLV means the price we could have taken was better than "
-        "where the market closed. If 'model-flagged' beats 'random', the model adds "
-        "value beyond just spotting a stale price.",
+        "**Read:** *converged frac* is how much of an offside book's gap to consensus "
+        "actually closed by kickoff (1.0 = fully corrected, 0 = didn't budge / drifted). "
+        "If 'model-flagged' > 'random' there, the model really does spot the stale prices.",
         "",
         "_Caveat: hourly 2015-16 data, no stake sizing, no commission, consensus "
         "used as a proxy for true probability. Directional evidence only._",
@@ -105,7 +113,8 @@ def run(config_path: str = "config/bakeoff.ci.yaml", edge: float = 0.01,
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/bakeoff.ci.yaml")
+    ap.add_argument("--features-config", default="config/features.yaml")
     ap.add_argument("--edge", type=float, default=0.01)
     ap.add_argument("--top-frac", type=float, default=0.25)
     a = ap.parse_args()
-    run(a.config, a.edge, a.top_frac)
+    run(a.config, a.features_config, a.edge, a.top_frac)

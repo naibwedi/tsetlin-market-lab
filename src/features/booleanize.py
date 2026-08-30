@@ -27,16 +27,35 @@ SHARP_BOOKS = {
 
 
 def _target(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    slot = cfg["target"]["outcome"]
-    thr = float(cfg["target"]["move_threshold_prob"])
-    h = int(cfg["target"]["horizon_snapshots"])
+    """Build the label.
+
+    mode "moves"     : did this book's fair p move by >= threshold over the horizon?
+    mode "converges" : did it move >= threshold *toward the consensus*? (a
+                       favourable correction for a bettor holding the current
+                       longer price). Rows where the book is already at consensus
+                       are dropped from this target.
+    """
+    tc = cfg["target"]
+    slot = tc["outcome"]
+    thr = float(tc["move_threshold_prob"])
+    h = int(tc["horizon_snapshots"])
+    mode = tc.get("mode", "moves")
+
     g = panel.sort_values("snapshot_ts").groupby(["match_id", "bookmaker"], sort=False)
     fut = g[f"fp_{slot}"].shift(-h)
     delta = fut - panel[f"fp_{slot}"]
-    y = (delta.abs() >= thr).astype("Int8")
     y3 = pd.Series(np.select([delta >= thr, delta <= -thr], [2, 0], default=1), index=panel.index)
     y3[fut.isna()] = pd.NA
-    return pd.DataFrame({"y": y, "y3": y3, "_future_exists": fut.notna()})
+
+    if mode == "converges":
+        dev = panel[f"dev_fp_{slot}"]            # this book minus consensus
+        toward = -np.sign(dev) * delta           # > 0 when moving toward consensus
+        y = ((delta.abs() >= thr) & (toward > 0)).astype("Int8")
+        exists = fut.notna() & (dev.abs() >= thr)   # only rows with a real gap to close
+    else:
+        y = (delta.abs() >= thr).astype("Int8")
+        exists = fut.notna()
+    return pd.DataFrame({"y": y, "y3": y3, "_future_exists": exists})
 
 
 def _literals(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:

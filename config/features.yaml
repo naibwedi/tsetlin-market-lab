@@ -6,11 +6,15 @@ out_dir: "data/features"
 # one source cleanly (e.g. only Beat-The-Bookie), set "data/raw/btb_long/*.parquet".
 raw_glob: "data/raw/**/*.parquet"
 
-# Target: does THIS book's fair p_home move by >= threshold over the horizon?
+# Target for THIS book over the horizon.
+#   mode: "moves"     -> does its fair p_home move by >= threshold (any direction)?
+#         "converges"  -> does it move >= threshold *toward consensus*? (v0.3;
+#                         rows already at consensus are dropped)
 target:
-  outcome: "home"                # home | draw | away
+  outcome: "home"
   move_threshold_prob: 0.005     # 0.5 implied-percentage-points
-  horizon_snapshots: 1           # 1 = next snapshot
+  horizon_snapshots: 1
+  mode: "moves"
 
 # Booleanization thresholds.
 dispersion_high_quantile: 0.75
