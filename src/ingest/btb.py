@@ -52,6 +52,13 @@ def _load_matches() -> pd.DataFrame:
     m = pd.concat(frames, ignore_index=True).drop_duplicates("match_id")
     m["league"] = m["league"].str.strip()
     m["commence_time"] = pd.to_datetime(m["match_datetime"], errors="coerce", utc=True)
+    sc = m["score"].astype(str).str.strip().str.extract(r"(\d+)\s*:\s*(\d+)")
+    m["home_goals"] = pd.to_numeric(sc[0], errors="coerce")
+    m["away_goals"] = pd.to_numeric(sc[1], errors="coerce")
+    m["result"] = np.select(
+        [m["home_goals"] > m["away_goals"], m["home_goals"] < m["away_goals"]],
+        ["H", "A"], default="D")
+    m.loc[m["home_goals"].isna(), "result"] = None
     return m.dropna(subset=["commence_time"])
 
 
@@ -100,6 +107,7 @@ def run(leagues: list[str], min_books: int, max_matches: int | None) -> None:
     mid2ct = dict(zip(matches["match_id"], matches["commence_time"], strict=False))
     mid2meta = {r.match_id: (r.home_team, r.away_team) for r in matches.itertuples()}
     mid2league = dict(zip(matches["match_id"], matches["league"], strict=False))
+    mid2result = dict(zip(matches["match_id"], matches["result"], strict=False))
     wanted = set(matches["match_id"])
 
     buf: dict[str, list[pd.DataFrame]] = {}
@@ -115,6 +123,7 @@ def run(leagues: list[str], min_books: int, max_matches: int | None) -> None:
             nb = long.groupby("match_id")["bookmaker"].nunique()
             keep = set(nb[nb >= min_books].index)
             long = long[long["match_id"].isin(keep)]
+            long["result"] = long["match_id"].astype(int).map(mid2result)
             long["_league"] = long["match_id"].astype(int).map(mid2league).map(_slug)
             for slug, part in long.groupby("_league"):
                 buf.setdefault(slug, []).append(part.drop(columns="_league"))

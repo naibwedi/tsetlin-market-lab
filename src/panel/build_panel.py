@@ -46,6 +46,9 @@ def _pivot_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
 
 def build(raw: pd.DataFrame) -> pd.DataFrame:
     w = _pivot_outcomes(raw).dropna(subset=["o_home", "o_draw", "o_away"])
+    if "result" in raw.columns:
+        res = raw[["match_id", "result"]].drop_duplicates("match_id")
+        w = w.merge(res, on="match_id", how="left")
 
     ip = np.column_stack(
         [implied_prob(w["o_home"]), implied_prob(w["o_draw"]), implied_prob(w["o_away"])]
