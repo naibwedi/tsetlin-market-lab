@@ -170,12 +170,66 @@ sharps move), not *which mispriced prices are exploitable*.
 - Bookmaker index → name mapping (`BOOKS` in `btb.py`) assumes the paper's column
   order; spot-check before trusting book-specific clauses.
 
-### Next (v0.4)
+---
 
-- Multi-league bake-off (`scripts/per_league.py`, 8 leagues ingested) — does the
-  lead/lag structure travel?
-- Sub-hourly data via the live collector or a paid feed.
-- Reframe as *forecast the closing consensus* (regression) rather than movement
-  classification.
-- Tune the TM (`max_included_literals`, `T`, `s`) to recover accuracy while
-  keeping the readable clauses.
+## v0.4 — two branches
+
+**Decision (user, 2026-08-30):** keep "which book moves next" as the *rule-discovery*
+branch (not optimised for profit). New *economic* branch = **forecast the closing
+consensus** + get modern sub-hourly data.
+
+### Rule-discovery branch — per-league (`scripts/per_league.py`)
+
+| league | matches | XGBoost AUC | naive |
+|---|--:|--:|--:|
+| Portugal Primeira Liga | 357 | **0.805** | 0.634 |
+| Netherlands Eredivisie | 386 | 0.792 | 0.613 |
+| France Ligue 1 | 442 | 0.775 | 0.622 |
+| Champions League | 265 | 0.756 | 0.615 |
+| Italy Serie A | 457 | 0.755 | 0.611 |
+| England Premier League | 433 | 0.750 | 0.608 |
+| Germany Bundesliga | 355 | 0.749 | 0.602 |
+| Spain Primera Division | 344 | 0.746 | 0.618 |
+
+**The signal travels** — every league 0.75–0.80. And the *less efficient* markets
+(Portugal, Netherlands — smaller leagues) are the *most* predictable: books lag
+each other more where the market is thinner.
+
+### Economic branch — closing-consensus forecast (`src/models/consensus_forecast.py`)
+
+Grain: one row per (match, snapshot) ≥3h before kickoff (EPL, 30k rows).
+Target: `closing_consensus_p_home − consensus_now`. Beating "no change" at
+predicting the close *is* closing-line value.
+
+| model | RMSE | dir. acc (moves >0.5%) |
+|---|--:|--:|
+| no change (current consensus) | **0.0221** | — |
+| toward sharp books | 0.0224 | 0.553 |
+| Ridge | 0.0229 | 0.508 |
+| XGBoost | 0.0238 | 0.539 |
+
+On raw RMSE **the current consensus is unbeatable** — you can't predict the
+*magnitude* of the drift. But direction has a modest edge, and the CLV check
+shows a real (small) signal:
+
+```
+model flags "home will shorten" on 1,826 test cases:
+  realised shortening   0.0091   (0.9 pp)
+  random same-size      0.0051
+  direction hit-rate    0.62
+```
+
+**When the model says "home will shorten", the consensus shortens ~1.8× more
+than random.** That is genuine closing-line value — bet home now at the longer
+price, the market comes to you. Small (0.9 pp, proxy-truth, hourly 2015 data) but
+it is the first result with an economic signal, and it validates the reframe:
+*forecasting the close* beats *classifying movements*.
+
+### Next
+
+- Re-run the consensus forecast on all 8 leagues (~240k rows) &mdash; more data,
+  per-league edges.
+- Sub-hourly modern data (live collector, or a paid feed) &mdash; the drift
+  window is probably finer than one hour.
+- Size the CLV edge properly: stake model, commission, real bet availability.
+- Tune the rule-discovery TM (`max_included_literals`, `T`, `s`).

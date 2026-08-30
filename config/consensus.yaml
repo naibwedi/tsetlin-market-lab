@@ -1,0 +1,12 @@
+# Economic branch: closing-consensus forecasting.
+panel_path: "data/panel/panel.parquet"
+out_dir: "data/consensus"
+
+min_hours: 3.0          # only forecast from >= 3h before kickoff
+horizon_hours: null     # null = forecast the closing consensus; N = N hours ahead
+
+split:
+  train_frac: 0.6
+  val_frac: 0.2
+
+results_dir: "results"

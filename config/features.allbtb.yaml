@@ -1,0 +1,13 @@
+panel_path: "data/panel_allbtb.parquet"
+out_dir: "data/features_allbtb"
+raw_glob: "data/raw/btb_long/*.parquet"
+target: {outcome: home, move_threshold_prob: 0.005, horizon_snapshots: 1, mode: moves}
+dispersion_high_quantile: 0.75
+above_consensus_prob: 0.01
+stale_snapshots: 3
+kickoff_buckets_minutes: [15, 60, 180]
+move_pct_bins: [0.01, 0.03]
+reference_books: ["pinnacle", "betfair_ex_eu", "bet365", "williamhill"]
+book_identity: sharp
+anchor_only_pre_kickoff: true
+min_books_per_snapshot: 4
