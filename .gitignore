@@ -3,11 +3,8 @@ __pycache__/
 .venv/
 venv/
 .env
-data/raw/
 !data/raw/live/
 !data/raw/live/**
-data/panel/
-data/features/
 results/*.json
 results/bakeoff_*/
 .pytest_cache/
@@ -17,8 +14,10 @@ results/*.md
 .venv-tm/
 scripts/__pycache__/
 config/_pl*.yaml
-data/_pl_*
-data/features_conv/
-data/panel_conv.parquet
-data/features*/
-data/panel*.parquet
+
+# data/ is all local except the committed live snapshots
+data/*
+!data/raw/
+data/raw/*
+!data/raw/live/
+!data/raw/live/**
