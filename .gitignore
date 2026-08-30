@@ -18,3 +18,7 @@ results/*.md
 scripts/__pycache__/
 config/_pl*.yaml
 data/_pl_*
+data/features_conv/
+data/panel_conv.parquet
+data/features*/
+data/panel*.parquet
