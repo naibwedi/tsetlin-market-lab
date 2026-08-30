@@ -98,17 +98,17 @@ def build(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def _stale_counter(w: pd.DataFrame) -> pd.Series:
-    out = np.zeros(len(w), dtype=int)
-    for idx in w.groupby(["match_id", "bookmaker"], sort=False).groups.values():
-        idx = list(idx)
-        c = 0
-        for pos, i in enumerate(idx):
-            if pos == 0 or bool(w.at[i, "moved"]):
-                c = 0
-            else:
-                c += 1
-            out[w.index.get_loc(i)] = c
-    return pd.Series(out, index=w.index)
+    """Rows since this (match, bookmaker) last moved. Vectorised: for each row,
+    position minus the position of the last 'reset' (group start or a move)."""
+    n = len(w)
+    grp = w.groupby(["match_id", "bookmaker"], sort=False).ngroup().to_numpy()
+    moved = w["moved"].to_numpy(dtype=bool)
+    pos = np.arange(n)
+    reset = moved.copy()
+    reset[0] = True
+    reset[1:] |= grp[1:] != grp[:-1]
+    last_reset = np.maximum.accumulate(np.where(reset, pos, -1))
+    return pd.Series(pos - last_reset, index=w.index)
 
 
 def run(config_path: str = "config/features.yaml") -> pd.DataFrame:
