@@ -37,12 +37,9 @@ def _pivot_outcomes(raw: pd.DataFrame) -> pd.DataFrame:
     is_home = name.eq(raw["home_team"].str.lower()) | name.eq("home")
     raw["slot"] = np.where(is_draw, "draw", np.where(is_home, "home", "away"))
 
-    wide = raw.pivot_table(
-        index=["sport", "snapshot_ts", "match_id", "commence_time", "bookmaker"],
-        columns="slot",
-        values="price",
-        aggfunc="last",
-    ).reset_index()
+    keys = ["sport", "snapshot_ts", "match_id", "commence_time", "bookmaker"]
+    raw = raw.drop_duplicates([*keys, "slot"], keep="last")
+    wide = raw.pivot(index=keys, columns="slot", values="price").reset_index()
     wide.columns.name = None
     return wide.rename(columns={"home": "o_home", "draw": "o_draw", "away": "o_away"})
 
