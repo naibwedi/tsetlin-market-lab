@@ -11,7 +11,13 @@ theoddsapi_free:
   # sport actually collected (1 region x 1 market). Three leagues at the paced
   # rate is about 5-6 runs a day.
   sports: ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"]
-  regions: "uk"          # uk has the deepest book coverage
+  regions: "uk"          # used only when `bookmakers` is empty
+  # Since 2026-08-30 the `uk` region alone dropped Pinnacle, Marathonbet and
+  # Betfair EU from the stored snapshots - the sharp references the lead/lag
+  # analysis needs. An explicit list of <= 10 books is billed as one region, so
+  # keep the sharps plus a spread of softs for the same 1 credit per league.
+  bookmakers: ["pinnacle", "betfair_ex_eu", "marathonbet", "matchbook", "smarkets",
+               "williamhill", "betvictor", "ladbrokes_uk", "paddypower", "unibet_uk"]
   markets: "h2h"
   odds_format: "decimal"
   min_hours_to_commence: -3   # only events from 3h ago to 72h ahead count

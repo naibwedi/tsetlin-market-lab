@@ -102,17 +102,19 @@ def theoddsapi_free(cfg: dict) -> list[dict]:
                 continue
         except (requests.RequestException, ValueError, KeyError) as e:
             print(f"  theoddsapi_free {sport}: events check failed ({e}); collecting anyway")
+        params = {
+            "apiKey": API_KEY,
+            "markets": cfg["markets"],
+            "oddsFormat": cfg.get("odds_format", "decimal"),
+        }
+        # An explicit bookmaker list (<= 10) is billed as ONE region, so we can keep
+        # the sharp references (Pinnacle, Betfair) without paying for a second region.
+        if cfg.get("bookmakers"):
+            params["bookmakers"] = ",".join(cfg["bookmakers"])
+        else:
+            params["regions"] = cfg["regions"]
         try:
-            r = requests.get(
-                f"{BASE}/sports/{sport}/odds",
-                params={
-                    "apiKey": API_KEY,
-                    "regions": cfg["regions"],
-                    "markets": cfg["markets"],
-                    "oddsFormat": cfg.get("odds_format", "decimal"),
-                },
-                timeout=30,
-            )
+            r = requests.get(f"{BASE}/sports/{sport}/odds", params=params, timeout=30)
             r.raise_for_status()
         except requests.HTTPError as e:
             print(f"  theoddsapi_free {sport}: {e}")
@@ -160,7 +162,7 @@ def _append(out_dir: Path, rows: list[dict]) -> None:
         part.drop_duplicates(
             subset=["match_id", "snapshot_ts", "bookmaker", "outcome_name"]
         ).to_parquet(path, index=False)
-        print(f"  -> {path}  (+{len(rows)} rows this run)")
+        print(f"  -> {path}  (+{len(part)} rows this run)")
 
 
 def run(config_path: str = "config/collect.yaml") -> None:
