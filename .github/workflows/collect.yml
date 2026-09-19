@@ -1,9 +1,12 @@
 name: collect-odds
 
-# Free unattended odds collection. Repo is public so Actions minutes are
-# unlimited and the schedule is reliable - but The Odds API FREE tier is only
-# 500 credits/month. config/collect.yaml is trimmed to 1 sport / 1 region
-# (= 1 credit/run); every 2h = ~360 credits/month, safely under 500.
+# Free unattended odds collection. GitHub drops roughly two thirds of scheduled
+# runs (measured: 4 a day delivered of 12 scheduled), so we schedule every 30
+# minutes and let src/ingest/collect.py decide whether a run should spend
+# anything. The Odds API FREE tier is 500 credits a month, reset on the 1st; the
+# collector paces spending along a linear burn-down of that quota and skips
+# leagues with nothing kicking off (both checks use free endpoints). A skipped
+# run costs no credit and commits nothing.
 #
 # For real intraday spacing you need one of:
 #   - a free Betfair delayed key (unlimited polling; set BETFAIR_* secrets and
@@ -15,7 +18,7 @@ name: collect-odds
 on:
   workflow_dispatch:
   schedule:
-    - cron: "13 */2 * * *"
+    - cron: "7,37 * * * *"
 
 permissions:
   contents: write

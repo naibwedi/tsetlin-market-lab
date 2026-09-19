@@ -16,6 +16,7 @@ Run:  python -m src.ingest.collect --config config/collect.yaml
 from __future__ import annotations
 
 import argparse
+import calendar
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,13 +38,70 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _hdr_int(resp: requests.Response, name: str) -> int | None:
+    try:
+        return int(float(resp.headers.get(name)))
+    except (TypeError, ValueError):
+        return None
+
+
+def within_pace(remaining: int | None, quota: int, reserve: int, now: datetime) -> bool:
+    """May we spend a credit now?
+
+    The free tier resets on the 1st of each month (seen: 480 -> 496 across
+    2026-08-31 -> 09-01). We spend only while at or ahead of a linear burn-down of
+    the monthly quota, so dropped GitHub runs and extra leagues can't drain it early.
+    """
+    if remaining is None:
+        return True
+    if remaining <= reserve:
+        return False
+    days = calendar.monthrange(now.year, now.month)[1]
+    elapsed = (now.day - 1) + now.hour / 24 + now.minute / 1440
+    return remaining >= quota * (1 - elapsed / days)
+
+
+def has_event_in_window(events: list[dict], now: datetime, lo_h: float, hi_h: float) -> bool:
+    for ev in events:
+        ct = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00"))
+        if lo_h <= (ct - now).total_seconds() / 3600.0 <= hi_h:
+            return True
+    return False
+
+
 def theoddsapi_free(cfg: dict) -> list[dict]:
     if not API_KEY:
         print("  theoddsapi_free: ODDS_API_KEY not set - skipping")
         return []
     rows: list[dict] = []
     now = datetime.now(timezone.utc)
+    quota = int(cfg.get("monthly_quota", 500))
+    reserve = int(cfg.get("reserve", 15))
+
+    # /sports is a free endpoint: read the live quota from its header first.
+    remaining: int | None = None
+    try:
+        r0 = requests.get(f"{BASE}/sports", params={"apiKey": API_KEY}, timeout=30)
+        remaining = _hdr_int(r0, "x-requests-remaining")
+    except requests.RequestException as e:
+        print(f"  theoddsapi_free: quota probe failed ({e}); continuing without pacing")
+    print(f"  theoddsapi_free: quota remaining={remaining} (before any paid call)")
+
     for sport in cfg["sports"]:
+        if cfg.get("pace", True) and not within_pace(remaining, quota, reserve, now):
+            print(f"  theoddsapi_free {sport}: skipped - ahead of monthly pace (remaining={remaining})")
+            continue
+        # /events is free: don't pay for a snapshot when nothing kicks off in the window.
+        try:
+            re_ = requests.get(f"{BASE}/sports/{sport}/events", params={"apiKey": API_KEY}, timeout=30)
+            re_.raise_for_status()
+            if not has_event_in_window(re_.json(), now, cfg["min_hours_to_commence"],
+                                       cfg["max_hours_to_commence"]):
+                print(f"  theoddsapi_free {sport}: skipped - no events in window "
+                      f"(remaining={_hdr_int(re_, 'x-requests-remaining')})")
+                continue
+        except (requests.RequestException, ValueError, KeyError) as e:
+            print(f"  theoddsapi_free {sport}: events check failed ({e}); collecting anyway")
         try:
             r = requests.get(
                 f"{BASE}/sports/{sport}/odds",
@@ -59,7 +117,7 @@ def theoddsapi_free(cfg: dict) -> list[dict]:
         except requests.HTTPError as e:
             print(f"  theoddsapi_free {sport}: {e}")
             continue
-        remaining = r.headers.get("x-requests-remaining")
+        remaining = _hdr_int(r, "x-requests-remaining")
         events = r.json()
         kept = 0
         for ev in events:

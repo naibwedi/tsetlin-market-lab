@@ -1,22 +1,27 @@
 # Free self-collection poller config.
 # Runs on a schedule (GitHub Actions cron or local task) and appends live odds
-# snapshots to data/raw/live/. Develop against synthetic data until this has
-# banked a few weeks of real snapshots.
+# snapshots to data/raw/live/.
 
 adapters:
-  - theoddsapi_free      # 500 req/month free tier - keep the budget small
+  - theoddsapi_free      # 500 credits/month free tier - paced, see below
   # - betfair             # enable only if you have a Betfair account + delayed key
 
 theoddsapi_free:
-  # FREE tier = 500 credits/month. cost/run = len(sports) * n_regions * n_markets.
-  # 1 sport x 1 region x 1 market = 1 credit/run. Every 2h => ~360/month. Safe.
-  # Add sports/regions only if you move off the free tier or add a Betfair key.
-  sports: ["soccer_epl"]
-  regions: "uk"          # uk has the deepest EPL book coverage
+  # FREE tier = 500 credits/month, reset on the 1st. Cost per run = one credit per
+  # sport actually collected (1 region x 1 market). Three leagues at the paced
+  # rate is about 5-6 runs a day.
+  sports: ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"]
+  regions: "uk"          # uk has the deepest book coverage
   markets: "h2h"
   odds_format: "decimal"
-  min_hours_to_commence: -3   # collect from 72h before until 3h after kickoff
+  min_hours_to_commence: -3   # only events from 3h ago to 72h ahead count
   max_hours_to_commence: 72
+  # Pacing: spend only while at or ahead of a linear burn-down of the month's
+  # quota, and never below `reserve`. Uses the free /sports and /events endpoints,
+  # so skipped runs cost nothing (international breaks used to burn ~1 in 4 credits).
+  pace: true
+  monthly_quota: 500
+  reserve: 15
 
 betfair:
   # See src/ingest/betfair.py docstring. Needs BETFAIR_USER / BETFAIR_PASS /
