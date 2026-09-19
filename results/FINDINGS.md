@@ -233,3 +233,49 @@ it is the first result with an economic signal, and it validates the reframe:
   window is probably finer than one hour.
 - Size the CLV edge properly: stake model, commission, real bet availability.
 - Tune the rule-discovery TM (`max_included_literals`, `T`, `s`).
+
+---
+
+## v0.5 — the same forecast on modern data (2026-09-19)
+
+Question: is the weak closing-consensus signal just a 2015-16 artefact?
+
+Data (`src/ingest/footballdata.py`, free, no key): football-data.co.uk, 5 leagues,
+2021/22 to 2026/27, 9,110 matches, 8 books. Two snapshots per match: **opening**
+(an approximated Friday/Tuesday capture, median 29 h before kickoff, range 3 to 79 h)
+and **closing**. 7,937 usable rows (at least 4 books). Date split; the test set is
+1,588 matches from 2025-01-19 to 2026-05-24. Full output in `consensus_forecast_fd.md`.
+
+| model | RMSE | direction on moves >0.5% | Spearman |
+|---|--:|--:|--:|
+| no change | 0.0270 | n/a | n/a |
+| toward sharp books | 0.0270 | 0.525 | 0.104 |
+| Ridge | 0.0269 | 0.559 | 0.076 |
+| XGBoost | 0.0275 | 0.550 | 0.110 |
+
+2015-16 EPL for comparison: toward-sharp 0.553 / 0.084, XGBoost 0.539 / 0.113.
+
+CLV check, 453 test cases flagged "home will shorten": mean realised shortening
+**+0.05 pp** against **-0.41 pp** for random picks; only **46%** of flagged cases
+shortened (0.62 in 2015-16).
+
+**What replicates.** Direction skill near 0.55 and a rank correlation near 0.1, in
+both decades and at very different resolution. The weak lead is not only a data-age
+artefact.
+
+**What does not.** The absolute edge. In 2015-16 the flagged set shortened by 0.9 pp
+and won 62% of the time. Here it shortens by about zero and wins 46%. The +0.46 pp
+gap to random (2015-16: +0.40 pp) is measured against a test period in which home
+probability drifted *down* 0.41 pp on average, while the training period averaged
++0.04 pp. The sign of the average drift flipped between periods, so the model may be
+separating from a drift rather than finding value. By my rough estimate the gap is
+about 2.5 standard errors (n = 453, drift std 2.7 pp), so it is not nothing, but it
+is not a bettable edge.
+
+**Checks.** Only 2.7% of matches have a different set of books at open and close, so
+the drift is not a book-mix artefact.
+
+**Limits of this test.** Opening is 1 to 3 days out, not an hourly path into the last
+three hours; 5 to 6 books, and the capture time is approximated; consensus is still a
+proxy for truth. This tests the *decade* question. The *resolution* question stays
+open and needs sub-hourly data.

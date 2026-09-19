@@ -1,0 +1,12 @@
+# Economic branch on football-data.co.uk: forecast the closing consensus from the
+# opening one, on modern seasons (2021/22 -> 2026/27). One row per match.
+panel_path: "data/panel_fd.parquet"
+out_dir: "data/consensus_fd"
+min_hours: 3.0
+horizon_hours: null
+split:
+  train_frac: 0.6
+  val_frac: 0.2
+results_dir: "results"
+out_name: "consensus_forecast_fd.md"
+data_note: "_football-data.co.uk, 2021/22 to 2026/27, 5 leagues, 5-6 books. Two snapshots per match: opening (an approximated Friday/Tuesday afternoon capture, ~1-3 days out) and closing. Consensus as proxy truth; directional evidence only._"

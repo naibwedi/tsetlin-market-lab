@@ -157,12 +157,13 @@ def _append(out_dir: Path, rows: list[dict]) -> None:
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{day}.parquet"
         part = part.drop(columns="_day")
+        n_new = len(part)
         if path.exists():
             part = pd.concat([pd.read_parquet(path), part], ignore_index=True)
         part.drop_duplicates(
             subset=["match_id", "snapshot_ts", "bookmaker", "outcome_name"]
         ).to_parquet(path, index=False)
-        print(f"  -> {path}  (+{len(part)} rows this run)")
+        print(f"  -> {path}  (+{n_new} rows this run)")
 
 
 def run(config_path: str = "config/collect.yaml") -> None:

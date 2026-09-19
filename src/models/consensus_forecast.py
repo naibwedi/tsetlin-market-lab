@@ -98,9 +98,10 @@ def run(config_path: str = "config/consensus.yaml") -> None:
              json.dumps(bt, indent=2), "```", "",
              "If `flagged_mean_realised_shortening` > `random_same_n_mean`, betting home "
              "on the model's calls locks in genuine closing-line value.",
-             "", "_2015-16 hourly data; consensus as proxy truth; directional evidence only._"]
+             "", cfg.get("data_note", "_2015-16 hourly data; consensus as proxy truth; directional evidence only._")]
     resolve(cfg["results_dir"]).mkdir(exist_ok=True)
-    (resolve(cfg["results_dir"]) / "consensus_forecast.md").write_text("\n".join(lines))
+    out_name = cfg.get("out_name", "consensus_forecast.md")
+    (resolve(cfg["results_dir"]) / out_name).write_text("\n".join(lines))
     print("\n".join(lines))
 
 

@@ -1,0 +1,3 @@
+# football-data.co.uk (modern seasons, open+close only) panel.
+panel_path: "data/panel_fd.parquet"
+raw_glob: "data/raw/footballdata/*.parquet"
