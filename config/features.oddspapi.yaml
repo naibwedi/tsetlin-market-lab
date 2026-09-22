@@ -1,0 +1,32 @@
+# OddsPapi (real sub-hourly price history, confirmed 2026-09-22: median ~16
+# min gap between updates). First data source that actually has the
+# resolution the BTB/football-data sources lack. Small sample so far (15
+# matches from one manual ingest run) -- proof-of-concept, not a full panel.
+#
+# Pinnacle and bet365 update ASYNCHRONOUSLY and never share an exact
+# timestamp (checked 2026-09-22: 0 of 18,916 raw timestamps had >1 book), so
+# this points at the output of src.panel.resample_ticks (a shared 5-min grid,
+# forward-filled), not the raw ingest -- otherwise every panel row has
+# n_books=1 and consensus/dispersion/lead-lag all degenerate.
+panel_path: "data/panel_oddspapi.parquet"
+out_dir: "data/features_oddspapi"
+raw_glob: "data/raw/oddspapi_resampled/*.parquet"
+
+target:
+  outcome: "home"
+  move_threshold_prob: 0.005
+  horizon_snapshots: 1
+  mode: "moves"
+
+dispersion_high_quantile: 0.75
+above_consensus_prob: 0.01
+stale_snapshots: 3
+kickoff_buckets_minutes: [15, 60, 180]
+move_pct_bins: [0.01, 0.03]
+
+# only pinnacle + bet365 were ingested (src/ingest/oddspapi.py --books default)
+reference_books: ["pinnacle", "bet365"]
+book_identity: "sharp"
+
+anchor_only_pre_kickoff: true
+min_books_per_snapshot: 2

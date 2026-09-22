@@ -1,0 +1,31 @@
+# Bake-off on OddsPapi's real sub-hourly data (5-min resampled grid).
+# Small sample (15 matches, one manual ingest run) -- proof-of-concept read,
+# not a claim. See config/features.oddspapi.yaml for the feature build.
+features_dir: "data/features_oddspapi"
+results_dir: "results"
+label: "OddsPapi moves-classifier (5-min grid, 15 EPL matches)"
+
+split:
+  method: "time_grouped"
+  train_frac: 0.6
+  val_frac: 0.2
+
+seeds: [0]
+
+baselines:
+  - majority
+  - moved_last
+  - logistic
+  - decision_tree
+  - random_forest
+  - xgboost
+  - lightgbm
+
+decision_tree:
+  max_depth: 5
+
+tsetlin:
+  enabled: false
+
+metrics: ["roc_auc", "pr_auc", "f1", "brier", "precision_at_k"]
+precision_at_k_frac: 0.1

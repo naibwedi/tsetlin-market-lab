@@ -1,0 +1,12 @@
+# src/models/ (+ related) index
+- `bakeoff.py` — trains baselines + TM, time-split, writes results/bakeoff_*.json and summary.md. `--config config/bakeoff*.yaml`.
+- `consensus_forecast.py` — economic branch: forecast closing consensus.
+- `../features/booleanize.py` — boolean literals for TM. `../features/consensus.py` — consensus features.
+- `../panel/build_panel.py` — snapshot panel (use `.pivot`, not `.pivot_table`). Assumes every book is sampled on the same snapshot grid; for genuine async tick data (OddsPapi), run `../panel/resample_ticks.py` first or `n_books` collapses to 1 for every row.
+- `../common/config.py` (YAML loader), `../common/odds.py` (odds/probability helpers), `../common/synthetic.py`.
+- `../analysis/clauses.py` — clause report. `../backtest/clv.py` — CLV backtest.
+- `../../scripts/per_league.py`, `per_league_fd.py` (modern data, by league), `calibration.py`, `tm_run.py` (`--config` picks the bakeoff config, `--out-prefix` names the output files), `tm_gt.py`.
+- `../../scripts/costed_backtest.py` — real odds, real match results, no proxy (see results/costed_backtest*.md).
+- `../../scripts/combined_era_bakeoff.py` — pools BTB + modern data into one training panel (config/features.combined.yaml); standalone, does not touch bakeoff.py or results/summary.md.
+- OddsPapi pipeline (`config/features.oddspapi.yaml` -> `config/bakeoff.oddspapi.yaml`): real sub-hourly data restores the moves-classifier signal (AUC 0.76, matches 2015-16) but from only 15 matches -- see results/FINDINGS.md v0.10 and results/bakeoff_oddspapi_summary.md.
+- Command-centre helpers: `../../scripts/collect_status.py` (collector health), `data_insights.py` (growth + upcoming), `router_check.py` (router health), `data_quality.py` (gaps, coverage, who leads), `live_report.py` (models on live data), `extract_rules.py` and `rules_lib.py` (readable rules and their audit), `tm_run_live.py` (Tsetlin on Colab, live data).
