@@ -1,0 +1,22 @@
+name: oddspapi-account
+
+# Checks the free /account endpoint (does not count against the 250/month
+# quota per the docs) so scaling decisions use a real usage number.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  account:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet requests
+      - name: Account
+        env:
+          ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
+        run: python -m scripts.oddspapi_account
