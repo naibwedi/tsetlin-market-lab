@@ -27,7 +27,10 @@ KEY = os.environ.get("ODDSPAPI_KEY", "")
 # (pinnacle, bet365, betfair-ex, williamhill, marathonbet). The first probe's
 # sample fixture (Brazilian Serie B) just happened not to have those specific
 # three in its own coverage - that was per-fixture, not an account limit.
-BOOKS = os.environ.get("ODDSPAPI_BOOKS", "pinnacle,bet365,betfair-ex")
+# betfair-ex is excluded here: the API rejects it in a multi-bookmaker call
+# ("you must provide only one bookmaker and exactly one outcomeId" - it's an
+# exchange, priced per outcome, not a fixed-odds book like the others).
+BOOKS = os.environ.get("ODDSPAPI_BOOKS", "pinnacle,bet365")
 DEPTHS_DAYS = [3, 30, 180, 365, 730]
 REQUEST_DELAY_S = 3.0   # be gentle: 429s showed up after just 2 calls with no delay
 used = 0
@@ -99,7 +102,7 @@ def main() -> None:
         # still returned real historical-odds data) - scan ALL fixtures, not
         # just the ones flagged with_odds.
         if epl is None:
-            epl = next((f for f in fx if "premier league" in str(f.get("tournamentName", "")).lower()
+            epl = next((f for f in fx if str(f.get("tournamentName", "")).strip().lower() == "premier league"
                        and "england" in str(f.get("categoryName", "")).lower()), None)
         if fallback is None and fx:
             fallback = fx[0]
