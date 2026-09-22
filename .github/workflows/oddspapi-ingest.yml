@@ -1,0 +1,44 @@
+name: oddspapi-ingest
+
+# Manual-only (not scheduled): the free tier is 250 requests/month, so this
+# stays under explicit control rather than a cron silently burning quota.
+# Pulls finished Premier League matches' full price history (2 sharp books)
+# and the match result. Writes to data/raw/oddspapi/ -- gitignored, never
+# committed, per OddsPapi's "no redistribution" terms (results/data_sources.md).
+#
+# Cost: ~1 request to list fixtures + 2 requests per match (history + score).
+# Default 15 matches -> about 31 requests.
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_matches:
+        description: "How many finished matches to pull"
+        default: "15"
+      days_back:
+        description: "How many days back to search for finished matches"
+        default: "60"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet requests pandas pyarrow
+      - name: Ingest
+        env:
+          ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
+        run: |
+          python -m src.ingest.oddspapi \
+            --max-matches "${{ github.event.inputs.max_matches }}" \
+            --days-back "${{ github.event.inputs.days_back }}"
+      - name: Upload as a workflow artifact (not committed to git)
+        uses: actions/upload-artifact@v4
+        with:
+          name: oddspapi-parquet
+          path: data/raw/oddspapi/oddspapi.parquet
+          retention-days: 14
