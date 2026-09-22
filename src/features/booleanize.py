@@ -105,6 +105,10 @@ def _literals(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     for col, vals in _reference_book_state(p, cfg["reference_books"]).items():
         lit[col] = vals
 
+    # --- era (only informative when the panel pools multiple data sources) ------
+    if "sport" in p.columns:
+        lit["is_modern_data"] = p["sport"].astype(str).str.startswith("fd_").to_numpy()
+
     # --- book identity ----------------------------------------------------------
     mode = cfg.get("book_identity", "sharp")
     is_sharp = p["bookmaker"].isin(SHARP_BOOKS).to_numpy()

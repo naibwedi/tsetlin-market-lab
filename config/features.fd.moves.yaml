@@ -1,0 +1,27 @@
+# "Which book moves next" classifier on football-data.co.uk (modern seasons).
+# Only 2 snapshots per (match, book) -- open, close -- so this is really "will
+# this book's price differ at close from what it was at open", not a genuine
+# snapshot-to-snapshot classifier like the BTB hourly version. Kept as its own
+# config (not features.fd.yaml, which feeds the consensus-forecast regression)
+# so the two branches don't share an out_dir.
+panel_path: "data/panel_fd.parquet"
+out_dir: "data/features_fd"
+raw_glob: "data/raw/footballdata/*.parquet"
+
+target:
+  outcome: "home"
+  move_threshold_prob: 0.005
+  horizon_snapshots: 1
+  mode: "moves"
+
+dispersion_high_quantile: 0.75
+above_consensus_prob: 0.01
+stale_snapshots: 3
+kickoff_buckets_minutes: [15, 60, 180]
+move_pct_bins: [0.01, 0.03]
+
+reference_books: ["pinnacle", "betfair_ex_eu", "bet365", "williamhill"]
+book_identity: "sharp"
+
+anchor_only_pre_kickoff: true
+min_books_per_snapshot: 4

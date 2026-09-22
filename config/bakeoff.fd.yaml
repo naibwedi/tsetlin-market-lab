@@ -1,0 +1,36 @@
+# Bake-off on modern data (football-data.co.uk), "which book moves next" framing.
+# See config/features.fd.moves.yaml for the feature build this reads.
+features_dir: "data/features_fd"
+results_dir: "results"
+label: "football-data.co.uk moves-classifier (modern, open->close)"
+
+split:
+  method: "time_grouped"
+  train_frac: 0.6
+  val_frac: 0.2
+
+seeds: [0]
+
+baselines:
+  - majority
+  - moved_last
+  - logistic
+  - decision_tree
+  - random_forest
+  - xgboost
+  - lightgbm
+
+decision_tree:
+  max_depth: 5
+
+tsetlin:
+  enabled: true
+  variants: ["weighted"]
+  grid:
+    clauses: [100, 150, 300, 500]
+    T: [8, 16, 32]
+    s: [3.0, 5.0, 10.0]
+  epochs: 10
+
+metrics: ["roc_auc", "pr_auc", "f1", "brier", "precision_at_k"]
+precision_at_k_frac: 0.1

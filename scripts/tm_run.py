@@ -4,8 +4,11 @@ Runs as its OWN process so a notebook kernel with a half-downgraded numpy can't
 break it. Writes results/tm_result.json and results/tm_clauses.txt, and prints
 progress to stdout.
 
-    python -m scripts.tm_run                 # auto: CUDA if available else CPU
-    python -m scripts.tm_run --cpu           # force CPU
+    python -m scripts.tm_run                                   # auto: CUDA if available else CPU
+    python -m scripts.tm_run --cpu                              # force CPU
+    python -m scripts.tm_run --config config/bakeoff.fd.yaml --out-prefix tm_fd
+        # ^ modern-data run; writes results/tm_fd_result.json + tm_fd_clauses.txt
+        #   instead of overwriting the default BTB tm_result.json / tm_clauses.txt
 """
 from __future__ import annotations
 
@@ -72,11 +75,15 @@ def main() -> None:
     ap.add_argument("--cpu", action="store_true")
     ap.add_argument("--clauses", type=int, default=0, help="override clause count")
     ap.add_argument("--epochs", type=int, default=0, help="override epoch count")
+    ap.add_argument("--config", default="config/bakeoff.yaml",
+                    help="which bakeoff config's features_dir/split to use")
+    ap.add_argument("--out-prefix", default="tm",
+                    help="results/<prefix>_result.json + <prefix>_clauses.txt")
     args = ap.parse_args()
     cpu = args.cpu
 
     resolve("results").mkdir(exist_ok=True)
-    sp = load_split(load_yaml("config/bakeoff.yaml"))
+    sp = load_split(load_yaml(args.config))
     Xtr = sp.X[sp.tr | sp.va].astype(np.uint32)
     ytr = sp.y[sp.tr | sp.va].astype(np.uint32)
     Xte = sp.X[sp.te].astype(np.uint32)
@@ -131,13 +138,13 @@ def main() -> None:
         "positive_rate": float(yte.mean()),
         "train_seconds": round(time.time() - t0, 1),
     }
-    resolve("results/tm_result.json").write_text(json.dumps(result, indent=2))
+    resolve(f"results/{args.out_prefix}_result.json").write_text(json.dumps(result, indent=2))
     print("\n=== Tsetlin Machine ===\n" + json.dumps(result, indent=2), flush=True)
 
     try:
         cl = _clauses(tm, sp.feat, n_clauses)
-        resolve("results/tm_clauses.txt").write_text("\n".join(cl))
-        print(f"\n{len(cl)} short clauses -> results/tm_clauses.txt", flush=True)
+        resolve(f"results/{args.out_prefix}_clauses.txt").write_text("\n".join(cl))
+        print(f"\n{len(cl)} short clauses -> results/{args.out_prefix}_clauses.txt", flush=True)
         for line in cl[:15]:
             print("  " + line, flush=True)
     except Exception as e:  # noqa: BLE001

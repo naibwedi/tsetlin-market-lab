@@ -62,6 +62,13 @@ IF ref_betfair_ex_eu_moved_last AND NOT book_is_188bet
 IF n_books_moved_prev_0                                    -> MOVE  (someone breaks the silence)
 ```
 
+> **Correction (2026-09-19 audit, see below):** the "someone breaks the silence"
+> reading of `n_books_moved_prev_0 -> MOVE` is backwards. Tested directly against
+> the BTB data, a quiet snapshot (nobody moved) is followed by a move only **2.6%**
+> of the time, against a **7.1%** base rate (0.37x) — quiet snapshots predict *more*
+> quiet, not a break. The clause fires correctly (its NO-MOVE cases are common) but
+> the plain-English gloss had the direction wrong.
+
 ---
 
 ## v0.2 — feature rework + a backtest (EPL, same 433 matches)
@@ -92,7 +99,7 @@ IF ref_betfair_ex_eu_moved_up_last             -> MOVE
 IF ref_williamhill_moved_last                  -> MOVE
 IF thisbook_lags_williamhill                   -> MOVE
 IF thisbook_lags_bet365_up                     -> MOVE
-IF n_books_moved_prev_0                        -> MOVE   (x6 - quiet hour precedes a move)
+IF n_books_moved_prev_0                        -> MOVE   (x6 - see correction below)
 IF thisbook_offside_high                       -> MOVE
 IF NOT kickoff_gt_180m                         -> MOVE   (movement concentrates near kickoff)
 IF thisbook_very_stale AND n_books_moved_prev_ge_3  -> MOVE
@@ -100,10 +107,12 @@ IF thisbook_lags_any_sharp AND thisbook_is_soft AND NOT (absmove_3pct | offside_
 ```
 
 **This is the v0.2 win:** bet365 / Betfair / William Hill lead; soft books lag
-them; a quiet hour tends to break; movement clusters near kickoff. That reads
-like an actual description of the market. The ~3-point accuracy cost (TM 0.742 →
-0.713) bought it. `max_included_literals` and `T`/`s` want tuning to recover
-accuracy without losing the readability.
+them; movement clusters near kickoff. That reads like an actual description of
+the market. The ~3-point accuracy cost (TM 0.742 → 0.713) bought it.
+`max_included_literals` and `T`/`s` want tuning to recover accuracy without
+losing the readability. (The "quiet hour tends to break" reading of the
+`n_books_moved_prev_0` clause does **not** hold — see the correction below and
+v0.8: quiet snapshots predict more quiet, the opposite of what was written here.)
 
 ### Closing-line-value backtest (`src/backtest/clv.py`)
 
@@ -311,3 +320,131 @@ tests.
 **Reading.** "Thinner market -> more predictable" gets one real data point of
 support (Netherlands) and one that does not hold up (Portugal) once the frame
 changes from hourly moves to a 2-point open/close forecast. Not a clean win.
+
+## v0.7 — costed backtest: real odds, real results, no edge
+
+Every CLV check so far used the consensus as a proxy for the true outcome (did the
+price move the "right" way). `scripts/costed_backtest.py` replaces that with real
+money: stake 1 unit on home at the best price on offer across books, whenever the
+model flags "home will shorten" (yhat > 0.5%), settle on the actual match result.
+No commission (fixed-odds books already bake their margin into the price).
+
+| | n | avg odds | win rate | ROI % |
+|---|--:|--:|--:|--:|
+| **2015-16 (BTB)** model-flagged | 1,826 | 2.32 | 0.465 | **-9.03** |
+| 2015-16 random same-n | 1,826 | 2.79 | 0.416 | -7.46 |
+| 2015-16 bet every row | 6,003 | 2.79 | 0.414 | -4.21 |
+| **modern (football-data)** model-flagged | 453 | 2.07 | 0.561 | **+0.38** |
+| modern random same-n | 453 | 2.95 | 0.450 | +1.75 |
+| modern bet every row | 1,588 | 2.86 | 0.436 | -4.01 |
+
+**Reading.** In both eras the model-flagged bets do **not** beat a random same-size
+sample from the test set — on 2015-16 data they are clearly worse (-9.0% vs -7.5%),
+and on modern data they are also worse (+0.4% vs +1.8%, though both are noisy at
+n=453). "Bet every row" landing around -4% in both eras is the expected fixed-odds
+home-bias/vig baseline, a useful sanity check that the backtest mechanics are sound.
+
+This directly contradicts the optimistic read in v0.4/v0.5 (flagged set shortens
+more than random, wins more often). The difference is what "right" means: the
+consensus-proxy CLV check rewards the model for calling the *direction of the
+consensus move*, which is not the same as calling *which side wins the match* at a
+*specific bookmaker's price*. The model is weakly right about where the market is
+headed and this does not convert into betting profit. **Verdict: no economic edge
+survives contact with real prices and real results, in either era.**
+
+## v0.8 — Rule Explorer audit: closing out the "clauses need work" thread
+
+`scripts/extract_rules.py` (2026-09-19) tests every clause pulled from the v0.2
+decision tree and the live-data Tsetlin export directly against data, rather than
+trusting the plain-English gloss written at the time. 44 rules: **20 supported,
+14 weak (right direction, small lift), 8 contradicted, 2 untested.**
+
+The 8 contradicted rules are all versions of the same mistake: reading "no book
+moved last snapshot" as "a quiet market is about to break" when the data says the
+opposite — a quiet snapshot is followed by a move only 2.6-6.0% of the time
+against a 7.1-7.9% base rate (0.37x-0.85x lift, i.e. *less* likely, not more).
+This affects the v0.1 and v0.2 clause write-ups above (both used the
+`n_books_moved_prev_0` literal and called it "someone breaks the silence" /
+"a quiet hour tends to break") — corrected in place above. Full detail per rule:
+`results/rules.json`.
+
+**Reading.** The Tsetlin clauses were directionally wrong on this one point, not
+fabricated — the underlying literal (`n_books_moved_prev_0`) is a real, useful
+predictor of the *opposite* class (NO-MOVE), and several of the "weak" (label
+correct, small lift) rules already say that correctly. The error was in how a
+human (me) glossed a MOVE-class clause containing that literal, not in the
+Tsetlin Machine's classification. Worth remembering when reading any TM clause
+report: check the class the clause votes for, not just the literals in it.
+## v0.9 — testing the moves-classifier itself on modern data (2026-09-22)
+
+Every prior modern-data test (v0.5-v0.7) used the *consensus-forecast regression*.
+The project's actual subject — "which book moves next", the classifier the
+Tsetlin Machine was built for — had never been run on football-data.co.uk at all.
+Built `config/features.fd.moves.yaml` + `config/bakeoff.fd.yaml` to do that, and
+ran the 7 non-TM baselines locally first (CPU, free, no Colab needed) before
+spending GPU time.
+
+```
+model            roc_auc
+majority          0.5000
+moved_last        0.5000
+logistic          0.4939
+random_forest     0.4874
+lightgbm          0.4866
+decision_tree     0.4861
+xgboost           0.4849
+```
+(57,907 rows, positive rate **0.832** — full table: `results/bakeoff_fd_moves_summary.md`)
+
+**No baseline beats chance.** Every trained model scores at or *below* 0.50
+ROC-AUC — logistic regression, random forest, XGBoost and LightGBM all land
+between 0.485 and 0.494. This is a materially different (worse) result than any
+prior test on this data: the consensus-forecast regression (v0.5) found a real,
+if weak, direction-calling signal (~0.55). The classifier framing finds nothing.
+
+**Why the two framings disagree.** football-data.co.uk has only 2 snapshots per
+book per match (opening capture, closing), so "will this book move by the next
+snapshot" collapses into "did the price differ from open to close" — a single
+1-to-3-day-ahead prediction, not a true snapshot-to-snapshot classifier. The
+85%+ positive rate confirms it: almost every price differs somewhat over that
+gap, so the useful information is *how much and which way* (what the regression
+target measures), not binary *whether* (what this classifier target measures).
+The "which book moves next" framing needs real intraday snapshots to mean
+anything; football-data's 2-point structure cannot support it.
+
+**Decision: skip the Colab TM run on this framing.** `notebooks/tm_bakeoff_fd_colab.ipynb`
+is built and ready (mirrors `tm_bakeoff_colab.ipynb`, points at the configs above,
+writes `results/tm_fd_result.json`/`tm_fd_clauses.txt` via `scripts/tm_run.py
+--config config/bakeoff.fd.yaml --out-prefix tm_fd`), but running the actual
+Tsetlin Machine would cost ~10 min of GPU time to most likely reconfirm ~0.49
+AUC — every baseline model already agrees there is nothing here to find. The
+Tsetlin Machine's actual test on modern data remains open only in the narrow
+sense of "not literally run"; the evidence that it would find nothing new is
+already about as strong as it gets short of running it.
+
+### Does pooling BTB + modern data help? (`scripts/combined_era_bakeoff.py`)
+
+Combined BTB EPL (2015-16, hourly, 433 matches) with all modern football-data
+matches (12,401 matches total, 803,994 rows) into one training panel, added an
+`is_modern_data` literal, and reran the classifier.
+
+```
+model                         roc_auc
+logistic                       0.4930
+decision_tree                  0.4933
+random_forest                  0.4881
+xgboost                        0.4892
+xgboost (no is_modern_data)    0.4961
+```
+
+**No help, and a confound.** `is_modern_data` is XGBoost's single most important
+literal (importance 0.57, rank 1 of 55) — the model leans on telling the two
+sources apart more than on anything else. Test performance (0.489) is
+statistically the same as the modern-only run (0.485-0.494) because the
+time-ordered split puts all of 2015-16 in train — BTB is chronologically first,
+so the test set here is 100% modern rows regardless. **Pooling adds rows, not
+comparable rows**: the two sources have different target semantics (hourly move
+vs multi-day move for the same 0.5% threshold), so mixing them does not create a
+bigger, more powerful training set — it creates a training set the model mostly
+learns to segment by source. Full detail: `results/combined_era.md`.
+

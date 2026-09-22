@@ -1,0 +1,28 @@
+# Combined panel: BTB EPL (2015-16, hourly, 72 snapshots/match) + football-data.co.uk
+# (2021/22-2026/27, 7 leagues, 2 snapshots/match: open, close). "Does era matter"
+# experiment -- adds an is_modern_data literal so the bake-off can show whether the
+# model is really learning microstructure or just telling the two sources apart.
+panel_path: "data/panel_combined.parquet"
+out_dir: "data/features_combined"
+
+raw_glob:
+  - "data/raw/btb_long/*.parquet"
+  - "data/raw/footballdata/*.parquet"
+
+target:
+  outcome: "home"
+  move_threshold_prob: 0.005
+  horizon_snapshots: 1
+  mode: "moves"
+
+dispersion_high_quantile: 0.75
+above_consensus_prob: 0.01
+stale_snapshots: 3
+kickoff_buckets_minutes: [15, 60, 180]
+move_pct_bins: [0.01, 0.03]
+
+reference_books: ["pinnacle", "betfair_ex_eu", "bet365", "williamhill"]
+book_identity: "sharp"
+
+anchor_only_pre_kickoff: true
+min_books_per_snapshot: 4

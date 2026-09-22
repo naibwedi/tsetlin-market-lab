@@ -114,13 +114,16 @@ def _stale_counter(w: pd.DataFrame) -> pd.Series:
 def run(config_path: str = "config/features.yaml") -> pd.DataFrame:
     cfg = load_yaml(config_path)
     # `raw_glob` (in features.yaml) picks which raw sources to use; default = all.
-    # e.g. "data/raw/btb_long/*.parquet" to analyse only Beat-The-Bookie.
-    pattern = cfg.get("raw_glob", "data/raw/**/*.parquet")
-    paths = sorted(resolve(".").glob(pattern))
+    # e.g. "data/raw/btb_long/*.parquet" to analyse only Beat-The-Bookie, or a list
+    # of patterns to combine specific sources (e.g. btb_long + footballdata).
+    patterns = cfg.get("raw_glob", "data/raw/**/*.parquet")
+    if isinstance(patterns, str):
+        patterns = [patterns]
+    paths = sorted({p for pat in patterns for p in resolve(".").glob(pat)})
     frames = [pd.read_parquet(p) for p in paths]
     if not frames:
-        raise SystemExit(f"no raw parquet matching {pattern}")
-    print(f"panel sources: {len(paths)} files matching {pattern}")
+        raise SystemExit(f"no raw parquet matching {patterns}")
+    print(f"panel sources: {len(paths)} files matching {patterns}")
     panel = build(pd.concat(frames, ignore_index=True))
     out = resolve(cfg["panel_path"])
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -8,9 +8,11 @@ adapters:
 
 theoddsapi_free:
   # FREE tier = 500 credits/month, reset on the 1st. Cost per run = one credit per
-  # sport actually collected (1 region x 1 market). Three leagues at the paced
-  # rate is about 5-6 runs a day.
-  sports: ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"]
+  # sport actually collected (1 region x 1 market). 2026-09-22: quota use was only
+  # ~24% (378/500 with 8 days left), so added Serie A + Ligue 1 to use it fully;
+  # pacing (below) keeps spend on track regardless of league count.
+  sports: ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga",
+           "soccer_italy_serie_a", "soccer_france_ligue_one"]
   regions: "uk"          # used only when `bookmakers` is empty
   # Since 2026-08-30 the `uk` region alone dropped Pinnacle, Marathonbet and
   # Betfair EU from the stored snapshots - the sharp references the lead/lag
