@@ -105,9 +105,14 @@ def _literals(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     for col, vals in _reference_book_state(p, cfg["reference_books"]).items():
         lit[col] = vals
 
-    # --- era (only informative when the panel pools multiple data sources) ------
+    # --- era (only informative when the panel pools multiple data sources;
+    # a single-source panel makes this constant, so skip it there - found via
+    # a TM run on the OddsPapi-only panel picking up a useless `IF is_modern_data`
+    # clause, 2026-09-22) ------------------------------------------------------
     if "sport" in p.columns:
-        lit["is_modern_data"] = p["sport"].astype(str).str.startswith("fd_").to_numpy()
+        is_modern = p["sport"].astype(str).str.startswith("fd_")
+        if is_modern.nunique() > 1:
+            lit["is_modern_data"] = is_modern.to_numpy()
 
     # --- book identity ----------------------------------------------------------
     mode = cfg.get("book_identity", "sharp")

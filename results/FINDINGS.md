@@ -506,3 +506,59 @@ answer: no — it's a resolution requirement, and modern data has it, just not
 from the two free sources (BTB's descendant data, football-data.co.uk) tried
 first.
 
+## v0.11 — the Tsetlin Machine, finally run on the best data — and it loses
+
+Every v0.10 number was baselines only. Ran the actual Tsetlin Machine
+(`notebooks/tm_bakeoff_oddspapi_colab.ipynb`, Colab T4, same 600 clauses /
+T=32 / s=5.0 / `max_included_literals=5` config as every other TM run) on the
+50-match OddsPapi panel — the project's best data, on the project's actual
+subject, for the first time.
+
+```
+epoch  1/15  AUC=0.712
+epoch  3/15  AUC=0.691
+epoch  6/15  AUC=0.730
+epoch  9/15  AUC=0.629
+epoch 12/15  AUC=0.615
+epoch 15/15  AUC=0.566
+final test AUC: 0.572   (PR-AUC 0.015, train 881s)
+```
+
+**TM does not just tie here — it loses, clearly, and gets worse as it
+trains.** Every baseline beat it: logistic 0.768, decision tree 0.764,
+XGBoost 0.764, LightGBM 0.754, random forest 0.738. TM's final 0.572 barely
+edges the naive "moved last snapshot" heuristic (0.578) — the exact pattern
+the `moved_last` baseline exists to catch, TM did not clear it. This is a
+real regression from the 2015-16 result, where TM tied the baselines (0.742
+vs XGBoost's 0.765, only ~2 points back). On this data it is ~19 points back
+and dropping across epochs, not converging.
+
+**Why, probably.** The training positive rate here is **0.78%**, far more
+imbalanced than 2015-16's 7.1% (a 5-minute grid gives many more "did nothing"
+steps for the same move threshold). The same epoch-instability pattern
+appeared in v0.2 on far less imbalanced BTB data ("epoch AUCs 0.72 -> 0.59 ->
+0.71") and was blamed there on the `max_included_literals=5` budget; at
+0.78% positive rate that instability looks to have gotten materially worse,
+not better. Untuned `T`/`s`/clause-count for this imbalance level is the
+most likely fix, not yet tried.
+
+**The clauses are also less interesting than v0.2's.** 80 short clauses came
+out, almost all single-literal and near-duplicates of the model's own most
+obvious features (`any_sharp_moved_last` appears standalone 8+ times,
+`n_books_moved_prev_0` negated 8+ times) — much less structure than the
+BTB run's lead/lag rulebook. One clause (`IF is_modern_data`) is a known
+bug, not a finding: `is_modern_data` is meant to distinguish BTB from
+football-data.co.uk rows in the *combined* panel (v0.9); on a single-source
+OddsPapi panel it is constant (always false) and carries no information —
+`booleanize.py` should skip it when the panel has only one source. Harmless
+here (a constant literal can't change any prediction) but worth fixing
+before the next combined-panel run.
+
+**Reading.** This closes the "has TM been tried on the best data" question
+honestly: yes, and it lost. The baselines' 0.769 AUC (v0.10) is real and
+holds up; the Tsetlin Machine specifically needs either more tuning for this
+imbalance level or is just a worse fit for 5-minute-grid data than for the
+hourly BTB grid it was tuned against. Matches this project's stated goal —
+find where TM does and doesn't have an edge, not prove it's better — cleanly:
+here, it doesn't.
+
