@@ -15,21 +15,38 @@ from __future__ import annotations
 
 import os
 import statistics
+import time
 from datetime import date, datetime, timedelta
 
 import requests
 
 BASE = "https://api.oddspapi.io/v4"
 KEY = os.environ.get("ODDSPAPI_KEY", "")
-BOOKS = os.environ.get("ODDSPAPI_BOOKS", "pinnacle,bet365,singbet")
+# Free-tier account (checked 2026-09-22): bookmakers access is a small,
+# mostly non-mainstream list (EstrelaBet BR, PokerStars UK, Gamebookers,
+# Rollbit, HTH, ...), not necessarily Pinnacle/bet365. Read from env so a
+# real account list can override this guess.
+BOOKS = os.environ.get("ODDSPAPI_BOOKS", "gamebookers,pokerstars.uk,hth")
 DEPTHS_DAYS = [3, 30, 180, 365, 730]
+REQUEST_DELAY_S = 3.0   # be gentle: 429s showed up after just 2 calls with no delay
 used = 0
 
 
 def get(path: str, **params):
+    """GET with a fixed delay before each call and one retry-with-backoff on 429
+    (the vendor's docs don't distinguish a monthly quota 429 from a burst-rate
+    429; the dashboard's 5/250 usage after our first probe run showed the quota
+    itself was nowhere near hit, so treat 429 as a transient rate limit)."""
     global used
+    time.sleep(REQUEST_DELAY_S)
     r = requests.get(f"{BASE}{path}", params={"apiKey": KEY, **params}, timeout=60)
     used += 1
+    if r.status_code == 429:
+        wait = float(r.headers.get("Retry-After", 15))
+        print(f"  (429, retrying once after {wait:.0f}s)")
+        time.sleep(wait)
+        r = requests.get(f"{BASE}{path}", params={"apiKey": KEY, **params}, timeout=60)
+        used += 1
     quota = {k: v for k, v in r.headers.items()
              if any(s in k.lower() for s in ("limit", "remaining", "quota", "credit"))}
     return r, quota
@@ -65,18 +82,29 @@ def main() -> None:
         raise SystemExit("set ODDSPAPI_KEY")
     print("== 1. archive depth: soccer fixtures at increasing age ==")
     pick = None
+    first_fixture_raw = None
     for d in DEPTHS_DAYS:
         start = date.today() - timedelta(days=d)
         r, quota = get("/fixtures", sportId=10, **{"from": start.isoformat(),
                                                    "to": (start + timedelta(days=2)).isoformat()})
         fx = _fixtures(r.json()) if r.ok else []
+        if fx and first_fixture_raw is None:
+            first_fixture_raw = fx[0]
         with_odds = [f for f in fx if f.get("hasOdds", True)]
-        print(f"  {d:>4}d ago  HTTP {r.status_code}  fixtures={len(fx)}  hasOdds~={len(with_odds)}")
+        print(f"  {d:>4}d ago  HTTP {r.status_code}  fixtures={len(fx)}  hasOdds~={len(with_odds)}"
+              f"{'' if r.ok else '  body: ' + r.text[:200]}")
         if with_odds and pick is None:
             pick = next((f for f in with_odds if "premier" in str(f.get("tournamentName", "")).lower()),
                         with_odds[0])
+        # a fixture that isn't flagged hasOdds may still answer /historical-odds -
+        # keep the first one seen as a fallback so we can find out empirically.
+        if pick is None and fx:
+            pick = fx[0]
+
+    if first_fixture_raw is not None:
+        print(f"\nsample raw fixture (keys + values, to see what hasOdds means here):\n  {first_fixture_raw}")
     if pick is None:
-        raise SystemExit("no fixture with odds found at any depth")
+        raise SystemExit("no fixtures returned at any depth (not even without odds)")
 
     print(f"\n== 2. resolution: /historical-odds for {pick.get('participant1Name')} v "
           f"{pick.get('participant2Name')} ({pick.get('tournamentName')}) ==")
