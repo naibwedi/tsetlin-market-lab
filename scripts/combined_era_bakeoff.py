@@ -13,7 +13,6 @@ Run: python -m src.panel.build_panel --config config/features.combined.yaml
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from src.common.config import resolve
@@ -72,8 +71,8 @@ def run(config_path: str = "config/bakeoff.ci.yaml",
 
     lines = [
         "# Combined-panel bake-off: does pooling eras help?", "",
-        f"- combined panel: BTB EPL (2015-16, hourly) + football-data.co.uk "
-        f"(2021/22-2026/27, 7 leagues, open/close only)",
+        "- combined panel: BTB EPL (2015-16, hourly) + football-data.co.uk "
+        "(2021/22-2026/27, 7 leagues, open/close only)",
         f"- rows: {len(sp.y):,}  test: {int(sp.te.sum()):,}  |  positive rate: {sp.y.mean():.3f}  "
         f"|  test positive rate: {sp.y[sp.te].mean():.3f}",
         f"- literals: {len(sp.feat)}", "",

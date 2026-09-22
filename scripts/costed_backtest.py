@@ -86,7 +86,7 @@ def run(config_path: str, thr: float = 0.005, commission: float = 0.0,
         "# Costed backtest (real odds, real results)", "",
         f"- config: `{config_path}` &middot; flag threshold: predicted consensus shortens > "
         f"{thr:.1%} &middot; commission: {commission:.0%}",
-        f"- stake: 1 unit on home at the best price on offer across books at that snapshot",
+        "- stake: 1 unit on home at the best price on offer across books at that snapshot",
         f"- test-set snapshots: {len(j):,} &middot; flagged: {len(flagged):,}",
         "", "```", tbl.to_string(), "```", "",
         "**roi_pct** is mean return per unit staked, net of commission (if any). "

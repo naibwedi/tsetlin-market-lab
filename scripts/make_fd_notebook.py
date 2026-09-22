@@ -68,7 +68,8 @@ if not os.path.isfile('/content/tm311/bin/python'):
     !uv pip install -q --python /content/tm311/bin/python \\
         'numpy<2' 'scikit-learn==1.5.2' pandas pyarrow pyyaml python-dotenv tmu pycuda
 !cd /content/tsetlin-market-lab && git pull -q
-!cd /content/tsetlin-market-lab && /content/tm311/bin/python -m scripts.tm_run --config config/bakeoff.fd.yaml --out-prefix tm_fd""")
+!cd /content/tsetlin-market-lab && /content/tm311/bin/python -m scripts.tm_run \\
+    --config config/bakeoff.fd.yaml --out-prefix tm_fd""")
 
 code("""# 4. The Tsetlin result + the rules it learned
 print(open('results/tm_fd_result.json').read())
