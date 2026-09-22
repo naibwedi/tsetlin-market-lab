@@ -82,6 +82,7 @@ def _rows(df: pd.DataFrame, season: str, div: str) -> pd.DataFrame:
             if not all(c in df.columns for c in cols):
                 continue
             sub = df[["_ko", "HomeTeam", "AwayTeam", "FTR", *cols]].copy()
+            sub[cols] = sub[cols].apply(pd.to_numeric, errors="coerce")
             sub = sub[(sub[cols] > 1.0).all(axis=1)]
             if sub.empty:
                 continue

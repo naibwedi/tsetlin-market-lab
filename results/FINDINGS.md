@@ -279,3 +279,35 @@ the drift is not a book-mix artefact.
 three hours; 5 to 6 books, and the capture time is approximated; consensus is still a
 proxy for truth. This tests the *decade* question. The *resolution* question stays
 open and needs sub-hourly data.
+
+## v0.6 — do thinner markets still lead, on modern data?
+
+The 2015-16 per-league bake-off (`results/per_league.md`) found Netherlands
+(0.792 AUC) and Portugal (0.805) clearly ahead of the big-5 leagues (0.75-0.78) for
+"which book moves next". Pulled those two divisions from football-data.co.uk
+(11,968 matches now across 7 leagues, up from 9,110/5) and re-ran the closing-
+consensus forecast per league (`scripts/per_league_fd.py` -> `results/per_league_fd.md`):
+
+| league | dir_acc (toward-sharp) | spearman | dir_acc (XGBoost) | spearman (XGBoost) |
+|---|---|---|---|---|
+| netherlands | 0.579 | 0.123 | 0.545 | 0.115 |
+| italy | 0.560 | 0.121 | 0.641 | 0.016 |
+| portugal | 0.558 | 0.089 | 0.494 | -0.016 |
+| spain | 0.534 | 0.114 | 0.530 | 0.145 |
+| england | 0.539 | 0.081 | 0.532 | 0.083 |
+| france | 0.512 | 0.062 | 0.556 | 0.095 |
+| germany | 0.480 | 0.051 | 0.555 | 0.104 |
+
+**Partial replication.** Netherlands is again the best-performing league on the
+simple toward-sharp baseline (0.579 direction accuracy, the highest of the seven),
+consistent with 2015-16. Portugal is mid-table here, not a standout — on this
+2-snapshot, open/close-only frame it no longer separates itself, so the earlier
+Portugal result may lean on the hourly path 2015-16 had and this test does not.
+XGBoost is noisier per league (small per-league test sets, 270-340 rows) and its
+ranking does not track the simple baseline's, so read the XGBoost column as
+unstable rather than a second confirmation. Germany is the weakest league in both
+tests.
+
+**Reading.** "Thinner market -> more predictable" gets one real data point of
+support (Netherlands) and one that does not hold up (Portugal) once the frame
+changes from hourly moves to a 2-point open/close forecast. Not a clean win.
