@@ -22,11 +22,12 @@ import requests
 
 BASE = "https://api.oddspapi.io/v4"
 KEY = os.environ.get("ODDSPAPI_KEY", "")
-# Free-tier account (checked 2026-09-22): bookmakers access is a small,
-# mostly non-mainstream list (EstrelaBet BR, PokerStars UK, Gamebookers,
-# Rollbit, HTH, ...), not necessarily Pinnacle/bet365. Read from env so a
-# real account list can override this guess.
-BOOKS = os.environ.get("ODDSPAPI_BOOKS", "gamebookers,pokerstars.uk,hth")
+# Free-tier account (checked 2026-09-22): bookmakers access actually covers
+# essentially every book, including the sharp references this project uses
+# (pinnacle, bet365, betfair-ex, williamhill, marathonbet). The first probe's
+# sample fixture (Brazilian Serie B) just happened not to have those specific
+# three in its own coverage - that was per-fixture, not an account limit.
+BOOKS = os.environ.get("ODDSPAPI_BOOKS", "pinnacle,bet365,betfair-ex")
 DEPTHS_DAYS = [3, 30, 180, 365, 730]
 REQUEST_DELAY_S = 3.0   # be gentle: 429s showed up after just 2 calls with no delay
 used = 0
@@ -80,8 +81,9 @@ def _walk_history(hist: dict) -> dict[str, list[datetime]]:
 def main() -> None:
     if not KEY:
         raise SystemExit("set ODDSPAPI_KEY")
-    print("== 1. archive depth: soccer fixtures at increasing age ==")
-    pick = None
+    print("== 1. archive depth: soccer fixtures at increasing age, looking for a Premier League match ==")
+    fallback = None
+    epl = None
     first_fixture_raw = None
     for d in DEPTHS_DAYS:
         start = date.today() - timedelta(days=d)
@@ -93,26 +95,33 @@ def main() -> None:
         with_odds = [f for f in fx if f.get("hasOdds", True)]
         print(f"  {d:>4}d ago  HTTP {r.status_code}  fixtures={len(fx)}  hasOdds~={len(with_odds)}"
               f"{'' if r.ok else '  body: ' + r.text[:200]}")
-        if with_odds and pick is None:
-            pick = next((f for f in with_odds if "premier" in str(f.get("tournamentName", "")).lower()),
-                        with_odds[0])
-        # a fixture that isn't flagged hasOdds may still answer /historical-odds -
-        # keep the first one seen as a fallback so we can find out empirically.
-        if pick is None and fx:
-            pick = fx[0]
+        # hasOdds is unreliable (confirmed 2026-09-22: a hasOdds=false fixture
+        # still returned real historical-odds data) - scan ALL fixtures, not
+        # just the ones flagged with_odds.
+        if epl is None:
+            epl = next((f for f in fx if "premier league" in str(f.get("tournamentName", "")).lower()
+                       and "england" in str(f.get("categoryName", "")).lower()), None)
+        if fallback is None and fx:
+            fallback = fx[0]
 
     if first_fixture_raw is not None:
         print(f"\nsample raw fixture (keys + values, to see what hasOdds means here):\n  {first_fixture_raw}")
+    pick = epl or fallback
     if pick is None:
         raise SystemExit("no fixtures returned at any depth (not even without odds)")
+    print(f"\n{'Premier League fixture found' if epl else 'no EPL fixture in range - using fallback'}: "
+          f"{pick.get('participant1Name')} v {pick.get('participant2Name')} ({pick.get('tournamentName')})")
 
     print(f"\n== 2. resolution: /historical-odds for {pick.get('participant1Name')} v "
-          f"{pick.get('participant2Name')} ({pick.get('tournamentName')}) ==")
+          f"{pick.get('participant2Name')} ({pick.get('tournamentName')}), bookmakers={BOOKS} ==")
     r, quota = get("/historical-odds", fixtureId=pick["fixtureId"], bookmakers=BOOKS)
     print(f"  HTTP {r.status_code}  quota headers: {quota or 'none exposed'}")
     if not r.ok:
         raise SystemExit(r.text[:300])
     per_book = _walk_history(r.json())
+    if not per_book:
+        print(f"  no bookmakers in {BOOKS} had data for this fixture. raw keys: "
+              f"{list(r.json().get('bookmakers', {}).keys())[:20]}")
     for book, ts in per_book.items():
         if len(ts) < 2:
             print(f"  {book}: {len(ts)} price points")
