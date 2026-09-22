@@ -1,0 +1,23 @@
+name: oddspapi-inspect
+
+# One-off diagnostic: prints the real field names inside an OddsPapi price
+# point (about 2 of the 250 monthly requests), so the ingest parser is built
+# against the actual shape. Prints only, writes nothing.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet requests
+      - name: Inspect
+        env:
+          ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
+        run: python -m scripts.oddspapi_inspect
