@@ -1,4 +1,4 @@
-from src.ingest.oddspapi import parse_history
+from src.ingest.oddspapi import _result_from_scores_body, parse_history
 
 FIXTURE = {
     "fixtureId": "id123", "participant1Name": "Tottenham Hotspur",
@@ -60,3 +60,37 @@ def test_price_is_the_raw_decimal_odds():
     df = parse_history(HIST, FIXTURE, books=["bet365"], result="H")
     home_prices = sorted(df[df["outcome_name"] == "Home"]["price"])
     assert home_prices == [2.25, 2.3]
+
+
+# real /scores shape, confirmed live 2026-09-22 (Fulham 1-1 Manchester United)
+SCORES_BODY = {
+    "fixtureId": "id1", "scores": {"periods": {
+        "result": {"participant1Score": 1, "participant2Score": 1},
+        "p1": {"participant1Score": 0, "participant2Score": 0},
+        "fulltime": {"participant1Score": 1, "participant2Score": 1},
+    }},
+}
+
+
+def test_scores_draw_from_fulltime_period():
+    assert _result_from_scores_body(SCORES_BODY) == "D"
+
+
+def test_scores_home_win():
+    body = {"scores": {"periods": {"fulltime": {"participant1Score": 2, "participant2Score": 0}}}}
+    assert _result_from_scores_body(body) == "H"
+
+
+def test_scores_away_win():
+    body = {"scores": {"periods": {"fulltime": {"participant1Score": 0, "participant2Score": 1}}}}
+    assert _result_from_scores_body(body) == "A"
+
+
+def test_scores_falls_back_to_result_period_without_fulltime():
+    body = {"scores": {"periods": {"result": {"participant1Score": 3, "participant2Score": 1}}}}
+    assert _result_from_scores_body(body) == "H"
+
+
+def test_scores_missing_periods_returns_none():
+    assert _result_from_scores_body({"scores": {"periods": {}}}) is None
+    assert _result_from_scores_body({}) is None
