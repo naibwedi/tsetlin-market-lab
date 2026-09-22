@@ -448,15 +448,13 @@ vs multi-day move for the same 0.5% threshold), so mixing them does not create a
 bigger, more powerful training set — it creates a training set the model mostly
 learns to segment by source. Full detail: `results/combined_era.md`.
 
-## v0.10 — real sub-hourly data restores the signal (preliminary, n=15 matches)
+## v0.10 — real sub-hourly data restores the signal (n=50 matches)
 
 v0.9 found zero signal for "which book moves next" on football-data.co.uk,
 and traced it to resolution: only 2 snapshots a match can't support a
 snapshot-to-snapshot classifier. OddsPapi's free tier (see
 `results/data_sources.md`) answers that directly — real per-book price ticks,
-median ~16 min apart. Built the ingest (`src/ingest/oddspapi.py`) and ran it
-for 15 finished Premier League matches (51,160 raw price points, Pinnacle +
-bet365).
+median ~16 min apart. Built the ingest (`src/ingest/oddspapi.py`).
 
 **A real methodological problem showed up first.** Pinnacle and bet365 update
 asynchronously and never share an exact timestamp (0 of 18,916 raw
@@ -465,42 +463,45 @@ logic groups by `(match_id, snapshot_ts)`, so every row had `n_books=1` and
 consensus silently collapsed to "your own price" — the whole lead/lag feature
 set was dead on arrival. Fixed with a new step, `src/panel/resample_ticks.py`:
 forward-fill each (match, book, outcome) onto a shared 5-minute grid (well
-under the ~16 min median gap) before the panel step. After the fix, 96% of
-panel rows have `n_books=2` and dispersion between the two books has real
-variance (median 0.33%, not zero).
+under the ~16 min median gap) before the panel step.
 
-With that fixed, ran the same 7 baselines used everywhere else in this
-project (`config/bakeoff.oddspapi.yaml`):
+**First run, 15 matches:** logistic 0.761 / XGBoost 0.758 AUC, test set 3
+matches, leakage control (shuffled target) 0.477 (chance). Promising, but
+thin — one manual ingest run capped by `--max-matches 15`.
+
+**Scaled up to 50 matches** (`--max-matches 50 --days-back 90`, ~100 of the
+250 monthly requests, checked via the free `/account` endpoint first: 50/250
+used before this run, comfortable headroom) — 126,855 raw price points,
+637,995 panel rows after resampling:
 
 ```
 model            roc_auc
-logistic          0.761
-xgboost           0.758
-decision_tree     0.734
-random_forest     0.697
-lightgbm          0.724
-moved_last        0.601
+xgboost           0.769
+logistic          0.768
+decision_tree     0.764
+lightgbm          0.754
+random_forest     0.738
+moved_last        0.578
 majority          0.500
 ```
 
-**This matches the 2015-16 BTB result (XGBoost 0.765) almost exactly** — on
-real modern data, at real sub-hourly resolution, with real sharp books.
-Leakage control: shuffling the target collapses logistic to **0.477** (chance),
-so this is not a resampling artefact.
+**The result held and got slightly stronger with more data.** Test set is
+now 10 matches (70,932 rows, up from 3/19,258), and **XGBoost 0.769 edges
+past the 2015-16 BTB result (0.765)** — on real modern data, at real
+sub-hourly resolution, with real sharp books. Leakage control: shuffling the
+target gives **0.511** (chance) on this larger split too.
 
-**Why this is "preliminary" and not a verdict.** The test set is only **3
-matches** (19,258 rows, but rows within a match are highly autocorrelated
-from the 5-min forward-fill, not 19,258 independent trials) — one manual
-ingest run, thin by construction. The 250-request/month free tier limits how
-fast this can grow (this run cost ~36 requests for 15 matches). Read this as
-"the resolution hypothesis looks right, worth scaling up," not as a
-replication of the 0.765 result.
+**Still a caveat, smaller than before.** 10 test matches is far better than 3
+but still not a large evaluation set — treat this as a strong, corroborated
+signal rather than a final number. Scaling further is mostly a matter of
+running the ingest again (quota allowing) and re-running the pipeline; both
+steps are proven.
 
 **Reading.** Put together with v0.9, the picture is now coherent rather than
 contradictory: the moves-classifier needs real intraday resolution to work at
 all (v0.9: zero signal without it), and when that resolution is present
-(v0.10), the signal comes back at roughly the same strength as 2015-16. The
-"is the signal a 2015-16 artefact" question from v0.5-v0.9 has a clearer
+(v0.10), the signal comes back at 2015-16 strength or slightly above it. The
+"is the signal a 2015-16 artefact" question from v0.5-v0.9 has a clear
 answer: no — it's a resolution requirement, and modern data has it, just not
 from the two free sources (BTB's descendant data, football-data.co.uk) tried
 first.

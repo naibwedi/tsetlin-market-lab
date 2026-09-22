@@ -1,0 +1,61 @@
+name: oddspapi-pipeline
+
+# Runs the full OddsPapi pipeline (ingest -> resample -> panel -> features ->
+# baseline bake-off) inside CI instead of on a laptop -- the panel step alone
+# takes several minutes and a few GB of RAM once matches get into the dozens.
+# Manual dispatch only, same as oddspapi-ingest.yml (250 req/month quota).
+#
+# Uploads the panel/features/bakeoff artifacts (not committed to git -- see
+# oddspapi-ingest.yml's note on OddsPapi's no-redistribution terms) and
+# prints the bake-off summary to the log so results are visible without a
+# download.
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_matches:
+        description: "How many finished matches to pull"
+        default: "50"
+      days_back:
+        description: "How many days back to search for finished matches"
+        default: "90"
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet requests pandas pyarrow pyyaml scikit-learn xgboost lightgbm
+      - name: Ingest
+        env:
+          ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
+        run: |
+          python -m src.ingest.oddspapi \
+            --max-matches "${{ github.event.inputs.max_matches }}" \
+            --days-back "${{ github.event.inputs.days_back }}"
+      - name: Resample onto a shared grid
+        run: python -m src.panel.resample_ticks
+      - name: Build panel
+        run: python -m src.panel.build_panel --config config/features.oddspapi.yaml
+      - name: Build features
+        run: python -m src.features.booleanize --config config/features.oddspapi.yaml
+      - name: Bake-off
+        run: |
+          python -m src.models.bakeoff --config config/bakeoff.oddspapi.yaml
+          echo "----- results/summary.md -----"
+          cat results/summary.md
+      - name: Upload panel + features + bake-off (not committed to git)
+        uses: actions/upload-artifact@v4
+        with:
+          name: oddspapi-pipeline-output
+          path: |
+            data/raw/oddspapi/oddspapi.parquet
+            data/panel_oddspapi.parquet
+            data/features_oddspapi/
+            results/summary.md
+            results/bakeoff_*.json
+          retention-days: 14
