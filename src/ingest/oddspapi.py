@@ -107,13 +107,18 @@ def find_finished_fixtures(session: requests.Session, key: str, days_back: int,
     return uniq[:max_matches]
 
 
-def fetch_result(session: requests.Session, key: str, fixture_id: str) -> str | None:
+def fetch_result(session: requests.Session, key: str, fixture_id: str,
+                 debug: bool = False) -> str | None:
     """H / D / A from the final-period score, or None if unavailable."""
     r = get(session, key, "/scores", fixtureId=fixture_id)
     if not r.ok:
+        if debug:
+            print(f"    /scores HTTP {r.status_code}: {r.text[:300]}")
         return None
-    periods = r.json()
-    periods = periods if isinstance(periods, list) else periods.get("periods", [])
+    body = r.json()
+    if debug:
+        print(f"    /scores raw: {body}")
+    periods = body if isinstance(body, list) else body.get("periods", [])
     if not periods:
         return None
     final = max(periods, key=lambda p: p.get("period", 0))
@@ -166,13 +171,15 @@ def run(days_back: int, max_matches: int, books: list[str], tournament: str, cat
     print(f"found {len(matches)} finished {tournament} fixtures in the last {days_back} days")
 
     frames = []
+    result_debug_count = [0]
     for f in matches:
         label = f"{f.get('participant1Name')} v {f.get('participant2Name')}"
         r = get(session, key, "/historical-odds", fixtureId=f["fixtureId"], bookmakers=",".join(books))
         if not r.ok:
             print(f"  {label}: history HTTP {r.status_code} {r.text[:200]}, skipped")
             continue
-        result = fetch_result(session, key, f["fixtureId"])
+        result = fetch_result(session, key, f["fixtureId"], debug=(result_debug_count[0] < 2))
+        result_debug_count[0] += 1
         df = parse_history(r.json(), f, books, result)
         print(f"  {label}: {len(df):,} rows, result={result}")
         if not df.empty:
