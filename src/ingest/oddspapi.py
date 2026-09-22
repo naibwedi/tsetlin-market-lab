@@ -69,19 +69,42 @@ def _fixtures(payload) -> list[dict]:
     return []
 
 
+MAX_WINDOW_DAYS = 10   # /fixtures 400s on wider ranges (same limit the vendor
+                       # documents for /historical-odds date-range queries)
+
+
 def find_finished_fixtures(session: requests.Session, key: str, days_back: int,
                             tournament: str, category: str, max_matches: int) -> list[dict]:
-    start = date.today() - timedelta(days=days_back)
-    r = get(session, key, "/fixtures", sportId=10,
-            **{"from": start.isoformat(), "to": date.today().isoformat()})
-    r.raise_for_status()
-    fx = _fixtures(r.json())
-    matches = [f for f in fx
-               if str(f.get("tournamentName", "")).strip().lower() == tournament.lower()
-               and category.lower() in str(f.get("categoryName", "")).lower()
-               and f.get("statusName") == "Finished"]
+    """Sweep backward in <=10-day windows (widest range the API accepts)
+    until max_matches is found or days_back is exhausted."""
+    matches: list[dict] = []
+    window_end = date.today()
+    swept = 0
+    while swept < days_back and len(matches) < max_matches:
+        window_days = min(MAX_WINDOW_DAYS, days_back - swept)
+        window_start = window_end - timedelta(days=window_days)
+        r = get(session, key, "/fixtures", sportId=10,
+                **{"from": window_start.isoformat(), "to": window_end.isoformat()})
+        if not r.ok:
+            print(f"  /fixtures {window_start}..{window_end}: HTTP {r.status_code} {r.text[:200]}")
+            break
+        fx = _fixtures(r.json())
+        found = [f for f in fx
+                 if str(f.get("tournamentName", "")).strip().lower() == tournament.lower()
+                 and category.lower() in str(f.get("categoryName", "")).lower()
+                 and f.get("statusName") == "Finished"]
+        matches.extend(found)
+        window_end = window_start
+        swept += window_days
     matches.sort(key=lambda f: f.get("startTime", ""), reverse=True)
-    return matches[:max_matches]
+    # de-dupe (a fixture could theoretically straddle a window boundary)
+    seen: set[str] = set()
+    uniq = []
+    for m in matches:
+        if m["fixtureId"] not in seen:
+            seen.add(m["fixtureId"])
+            uniq.append(m)
+    return uniq[:max_matches]
 
 
 def fetch_result(session: requests.Session, key: str, fixture_id: str) -> str | None:
@@ -147,7 +170,7 @@ def run(days_back: int, max_matches: int, books: list[str], tournament: str, cat
         label = f"{f.get('participant1Name')} v {f.get('participant2Name')}"
         r = get(session, key, "/historical-odds", fixtureId=f["fixtureId"], bookmakers=",".join(books))
         if not r.ok:
-            print(f"  {label}: history HTTP {r.status_code}, skipped")
+            print(f"  {label}: history HTTP {r.status_code} {r.text[:200]}, skipped")
             continue
         result = fetch_result(session, key, f["fixtureId"])
         df = parse_history(r.json(), f, books, result)
