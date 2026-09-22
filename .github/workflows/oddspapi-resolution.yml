@@ -1,0 +1,24 @@
+name: oddspapi-resolution
+
+# De-duplicated resolution check on OddsPapi's free tier (about 7 of the 250
+# monthly requests). Prints a summary only; the terms say data may not be
+# redistributed as a standalone product, so nothing is stored in this public
+# repo. Needs repo secret ODDSPAPI_KEY (same one probe-oddspapi.yml uses).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  resolution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet requests
+      - name: Resolution check
+        env:
+          ODDSPAPI_KEY: ${{ secrets.ODDSPAPI_KEY }}
+        run: python -m scripts.oddspapi_resolution
