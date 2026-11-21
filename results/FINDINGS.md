@@ -562,3 +562,69 @@ hourly BTB grid it was tuned against. Matches this project's stated goal —
 find where TM does and doesn't have an edge, not prove it's better — cleanly:
 here, it doesn't.
 
+
+
+## v0.12 — v0.11 was a tuning artefact, and the signal still isn't money (2026-11-21)
+
+Re-ran the Tsetlin Machine on the same 50-match OddsPapi split (same train /
+validation / 10 test matches as v0.10-v0.11) with a second, bit-packed
+implementation run locally, with the two changes v0.11 listed as untried:
+class-weighted training (`balanced`) and keeping the best *validation* epoch
+with early stopping. Local-only: no engine code or raw data is added to this repo.
+
+**1. The 0.572 was a tuning artefact.**
+
+| run (test AUC, 10 matches) | AUC |
+|---|---|
+| TM, 500 clauses, balanced + best-epoch, seeds 0/1/2 | 0.759 / 0.763 / 0.762 |
+| TM, 2000 clauses, same, seeds 0/1/2 | 0.761 / 0.760 / 0.762 |
+| TM, no class weighting | 0.654 |
+| TM, shuffled labels (control) | 0.551 |
+| baselines (v0.10): XGBoost / logistic / tree / LightGBM | 0.769 / 0.768 / 0.764 / 0.754 |
+
+With class weighting the TM ties the baselines (about 0.76 vs 0.77). Without
+it, accuracy-based epoch/T selection degenerates at a 0.78% positive rate
+(0.654). More clauses did not help. Best epoch is reached in 1-4 epochs, which
+is the same instability v0.11 saw. The shuffled-label control scores 0.551 on
+test, so the 10-match test set carries roughly +/-0.05 of noise: 0.76 vs 0.77
+is a tie, not a loss. Caveat: the TM runs trained on train only; the v0.10
+baselines used train+val.
+
+**2. AUC does not turn into money.** The v0.10 target ("book moves >= 0.5pp in
+5 min") has no direction, so a costed test needs one. Rule used: back HOME at
+this book's price when the model flags a move AND this book pays more than the
+other (the stale side). One bet per (match, book, hour). Money = entry odds x
+Pinnacle closing fair probability - 1 (CLV-style EV), CI by bootstrap over matches.
+
+| strategy (stale side) | bets | EV vs close | 95% CI |
+|---|---|---|---|
+| no model | 2,982 | -3.8% | -7.7 to -0.2 |
+| TM top 1% | 80 | -4.2% | -7.9 to +0.1 |
+| TM top 5% | 392 | -4.6% | -9.5 to +0.4 |
+| XGBoost top 1% | 117 | -3.2% | -6.7 to +0.4 |
+| XGBoost top 5% | 304 | -5.3% | -10.4 to +0.5 |
+
+Flagged bets lose about as much as random stale-side bets (-3.8%), about the
+bet365 margin. Realised ROI swings by +/-100% on 10 matches and says nothing.
+
+**3. The directional target (`converges`: move toward the other book).**
+Config: `config/features.oddspapi.converges.yaml`. 219k rows, 0.4% positive.
+Test AUC: TM 0.756, XGBoost 0.731 (one seed).
+
+| strategy (stale side) | bets | EV vs close |
+|---|---|---|
+| no model | 1,183 | -6.1% |
+| TM top 1% | 60 | -4.1% [-8.3, +1.7] |
+| XGBoost top 1% | 74 | -4.0% [-8.3, +1.1] |
+| TM / XGBoost top 5% | 170 / 213 | -6.9% / -6.2% (= random) |
+
+A hint, not a finding: the top 1% beats random stale-side bets by about 2
+points, but it is still below break-even, the interval spans zero, and n is
+60-74 bets on 10 matches.
+
+**Reading.** No edge on this data. Only two books exist in the panel, and
+bet365's margin (~4%) is about the size of every result. Two books cannot
+test the usual soft-book-vs-sharp-book idea. What would change this: more
+books, more matches (>= 40 test matches), and a pre-registered pass rule
+(net EV > 0 with a match-bootstrap CI above zero). Kill rule: if that fails at
+>= 40 test matches, close the question as a clean negative.
