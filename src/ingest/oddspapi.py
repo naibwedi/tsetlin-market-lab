@@ -74,11 +74,12 @@ MAX_WINDOW_DAYS = 10   # /fixtures 400s on wider ranges (same limit the vendor
 
 
 def find_finished_fixtures(session: requests.Session, key: str, days_back: int,
-                            tournament: str, category: str, max_matches: int) -> list[dict]:
+                            tournament: str, category: str, max_matches: int,
+                            end: date | None = None) -> list[dict]:
     """Sweep backward in <=10-day windows (widest range the API accepts)
     until max_matches is found or days_back is exhausted."""
     matches: list[dict] = []
-    window_end = date.today()
+    window_end = end or date.today()
     swept = 0
     while swept < days_back and len(matches) < max_matches:
         window_days = min(MAX_WINDOW_DAYS, days_back - swept)
@@ -166,13 +167,15 @@ def parse_history(hist: dict, fixture: dict, books: list[str], result: str | Non
 
 
 def run(days_back: int, max_matches: int, books: list[str], tournament: str, category: str,
-        after: str = "") -> None:
+        after: str = "", before: str = "") -> None:
     key = os.environ.get("ODDSPAPI_KEY", "")
     if not key:
         raise SystemExit("set ODDSPAPI_KEY")
 
     session = requests.Session()
-    matches = find_finished_fixtures(session, key, days_back, tournament, category, max_matches * 2 if after else max_matches)
+    matches = find_finished_fixtures(session, key, days_back, tournament, category,
+                                     max_matches * 2 if after else max_matches,
+                                     end=date.fromisoformat(before) if before else None)
     if after:  # keep only fixtures that kicked off after this date (held-out test set)
         matches = [f for f in matches if str(f.get("startTime", ""))[:10] > after][:max_matches]
     print(f"found {len(matches)} finished {tournament} fixtures in the last {days_back} days")
@@ -215,6 +218,7 @@ if __name__ == "__main__":
     ap.add_argument("--books", default="pinnacle,bet365")
     ap.add_argument("--tournament", default="Premier League")
     ap.add_argument("--category", default="England")
+    ap.add_argument("--before", default="", help="YYYY-MM-DD: start the sweep here instead of today")
     ap.add_argument("--after", default="", help="YYYY-MM-DD: only matches kicking off after this date")
     a = ap.parse_args()
-    run(a.days_back, a.max_matches, a.books.split(","), a.tournament, a.category, a.after)
+    run(a.days_back, a.max_matches, a.books.split(","), a.tournament, a.category, a.after, a.before)

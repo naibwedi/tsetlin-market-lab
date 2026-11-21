@@ -21,6 +21,9 @@ on:
       books:
         description: "Comma list, max 3 per history call"
         default: "pinnacle,bet365,williamhill"
+      before:
+        description: "Start the sweep at this date instead of today (YYYY-MM-DD, blank = today)"
+        default: ""
       after:
         description: "Only matches kicking off after this date (YYYY-MM-DD)"
         default: "2026-09-21"
@@ -41,7 +44,7 @@ jobs:
         run: |
           python -m src.ingest.oddspapi \
             --max-matches "${{ github.event.inputs.max_matches }}" \
-            --days-back "${{ github.event.inputs.days_back }}"             --books "${{ github.event.inputs.books }}"             --after "${{ github.event.inputs.after }}"
+            --days-back "${{ github.event.inputs.days_back }}"             --books "${{ github.event.inputs.books }}"             --after "${{ github.event.inputs.after }}"             --before "${{ github.event.inputs.before }}"
       - name: Upload as a workflow artifact (not committed to git)
         uses: actions/upload-artifact@v4
         with:
