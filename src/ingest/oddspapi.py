@@ -185,6 +185,9 @@ def run(days_back: int, max_matches: int, books: list[str], tournament: str, cat
             print(f"  {label}: history HTTP {r.status_code} {r.text[:200]}, skipped")
             continue
         result = fetch_result(session, key, f["fixtureId"])
+        got = {b: bool((((v or {}).get("markets") or {}).get(WINNER_MARKET_KEY)))
+               for b, v in (r.json().get("bookmakers") or {}).items()}
+        print(f"    books returned (has 1x2 market): {got}")
         df = parse_history(r.json(), f, books, result)
         print(f"  {label}: {len(df):,} rows, result={result}")
         if not df.empty:
