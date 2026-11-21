@@ -18,11 +18,17 @@ on:
       days_back:
         description: "How many days back to search for finished matches"
         default: "60"
+      books:
+        description: "Comma list, max 3 per history call"
+        default: "pinnacle,bet365,williamhill"
+      after:
+        description: "Only matches kicking off after this date (YYYY-MM-DD)"
+        default: "2026-09-21"
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,10 +41,10 @@ jobs:
         run: |
           python -m src.ingest.oddspapi \
             --max-matches "${{ github.event.inputs.max_matches }}" \
-            --days-back "${{ github.event.inputs.days_back }}"
+            --days-back "${{ github.event.inputs.days_back }}"             --books "${{ github.event.inputs.books }}"             --after "${{ github.event.inputs.after }}"
       - name: Upload as a workflow artifact (not committed to git)
         uses: actions/upload-artifact@v4
         with:
           name: oddspapi-parquet
           path: data/raw/oddspapi/oddspapi.parquet
-          retention-days: 14
+          retention-days: 1

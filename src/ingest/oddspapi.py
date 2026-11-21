@@ -165,13 +165,16 @@ def parse_history(hist: dict, fixture: dict, books: list[str], result: str | Non
     return pd.DataFrame(rows)
 
 
-def run(days_back: int, max_matches: int, books: list[str], tournament: str, category: str) -> None:
+def run(days_back: int, max_matches: int, books: list[str], tournament: str, category: str,
+        after: str = "") -> None:
     key = os.environ.get("ODDSPAPI_KEY", "")
     if not key:
         raise SystemExit("set ODDSPAPI_KEY")
 
     session = requests.Session()
-    matches = find_finished_fixtures(session, key, days_back, tournament, category, max_matches)
+    matches = find_finished_fixtures(session, key, days_back, tournament, category, max_matches * 2 if after else max_matches)
+    if after:  # keep only fixtures that kicked off after this date (held-out test set)
+        matches = [f for f in matches if str(f.get("startTime", ""))[:10] > after][:max_matches]
     print(f"found {len(matches)} finished {tournament} fixtures in the last {days_back} days")
 
     frames = []
@@ -209,5 +212,6 @@ if __name__ == "__main__":
     ap.add_argument("--books", default="pinnacle,bet365")
     ap.add_argument("--tournament", default="Premier League")
     ap.add_argument("--category", default="England")
+    ap.add_argument("--after", default="", help="YYYY-MM-DD: only matches kicking off after this date")
     a = ap.parse_args()
-    run(a.days_back, a.max_matches, a.books.split(","), a.tournament, a.category)
+    run(a.days_back, a.max_matches, a.books.split(","), a.tournament, a.category, a.after)
