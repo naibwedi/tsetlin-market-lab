@@ -20,7 +20,7 @@ hint is real.
 
 ## Data (new, held out)
 
-- OddsPapi free tier, finished EPL matches, **books: pinnacle, bet365, williamhill**
+- OddsPapi free tier, finished EPL matches, **books: pinnacle, bet365, paddypower**
   (3 books fit in one history call, so no extra quota).
 - Matches are taken in date order from newest backwards until the quota budget
   is spent (at most 200 requests in this round). No picking or dropping of matches.
@@ -31,7 +31,7 @@ hint is real.
 ## Frozen method
 
 - Features: the current Boolean features (`config/features.oddspapi*.yaml`),
-  plus the William Hill literals the same code produces. No new feature ideas
+  plus the Paddy Power literals the same code produces. No new feature ideas
   after seeing test results.
 - Primary target: `converges` (move toward the other book). Secondary: `moves`.
 - Models: Tsetlin Machine (500 clauses, class-weighted, best validation epoch,
@@ -79,4 +79,8 @@ a realistic fill haircut, not live money.
 
 ## Deviations log
 
-(none yet)
+- 2026-11-21 (before any test data was collected): the third book is **paddypower**,
+  not williamhill. A 2-match trial ingest returned no William Hill price history
+  for current fixtures (Paddy Power and Marathonbet both returned data). Same
+  call slot, no extra quota. Wherever this document says "William Hill", read
+  "Paddy Power". Test matches are those kicking off after 2026-09-21.
